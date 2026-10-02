@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  checks:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        # 3.13 是本机实际验证环境，必须纳入（此前矩阵只到 3.12，与实际使用脱节）
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install numpy matplotlib scipy hitran-api
+        pip install -e ./spectrolink_core
+
+    # 全仓语法检查（排除外部依赖目录 / Hitran_Data 缓存）
+    - name: Syntax check (all servers + core)
+      shell: pwsh
+      run: |
+        $files = Get-ChildItem -Recurse -Filter *.py |
+          Where-Object { $_.FullName -notmatch '\.git|Hitran_Data|__pycache__|\.python|site-packages|node_modules' }
+        $fail = @()
+        foreach ($f in $files) {
+          python -m py_compile $f.FullName 2>&1 | Out-Null
+          if ($LASTEXITCODE -ne 0) { $fail += $f.FullName }
+        }
+        Write-Host "py_compile: $($files.Count) files, $($fail.Count) failures"
+        if ($fail.Count -gt 0) { $fail | Write-Host; exit 1 }
+
+    # 硬门禁（离线、确定性）：schema↔签名一致性、参数透传、越界重锚、
+    # 未知键拒绝、批量请求、文件名净化等。这些是不依赖 HITRAN 的契约，必须每次全绿。
+    # -X utf8：Windows runner 控制台默认 CP1252，脚本虽已自行 reconfigure，这里再加一道。
+    #
+    # ★ 为什么额外断言"最低通过数"：契约自检曾经**在写盘那一节抛权限异常直接终止**，
+    #   后面的检查全部没跑，而 CI 依然显示"绿"（实测只跑到 80 项就断了）。
+    #   脚本自身已改为遇环境限制记 SKIP 而非中断；这里再加一道：通过数低于下限即说明
+    #   有检查被静默吞掉（新节没跑到 / 提前 return / 异常被吞），必须变红。
+    #   维护：新增检查后把下限同步抬高（当前实测 138 通过 / 2 跳过）。
+    - name: TDLAS contract check (offline)
+      shell: pwsh
+      run: |
+        $MIN_PASS = 130
+        Push-Location server-tdlas
+        $out = python -X utf8 tools/contract_check.py
+        $code = $LASTEXITCODE
+        Pop-Location
+        $out | ForEach-Object { Write-Host $_ }
+        $pass = ([regex]::Matches(($out -join "`n"), '(?m)^\s*PASS\s')).Count
+        Write-Host "contract: pass=$pass min=$MIN_PASS exit=$code"
+        if ($code -ne 0) { Write-Error "contract_check 退出码非 0"; exit 1 }
+        if ($pass -lt $MIN_PASS) {
+          Write-Error "契约检查通过数 $pass 低于下限 $MIN_PASS —— 有检查被静默跳过，请排查"
+          exit 1
+        }
+
+    # α(ν) 独立交叉验证：用 SciPy 的 Voigt（不同作者/算法/代码库）+ **自实现的强度与线宽标度**
+    # 重算 HAPI 的 α(ν)。守的是"谱线计算到底对不对"——此前自检 10 项里只有 1 项是真正独立互校。
+    # 判据：α 峰值 < 15%、积分强度 < 10%（点对点差异是两种 Voigt 近似的固有差，仅作报告）。
+    - name: TDLAS alpha cross-validation (offline)
+      shell: pwsh
+      run: |
+        Push-Location server-tdlas
+        python -X utf8 tools/alpha_crossval.py
+        $code = $LASTEXITCODE
+        Pop-Location
+        if ($code -ne 0) { exit $code }
+
+    # 保真度审计（同样离线、确定性）：能力登记表 ↔ 源码证据 ↔ 参数可达性。
+    # 它守住的是"声明了却没实现 / 声明了却没接上"这一类静默错误——本项目已因此栽过两次。
+    - name: TDLAS fidelity audit (offline)
+      shell: pwsh
+      run: |
+        Push-Location server-tdlas
+        python -X utf8 tools/tdlas_fidelity.py
+        $code = $LASTEXITCODE
+        Pop-Location
+        if ($code -ne 0) { exit $code }
+
+    # 多技术 server 离线自检（硬门禁）：NDIR / FTIR / DOAS 纯离线确定性；
+    # CRDS 在 HITRAN 在线失败时自动降级 gaussian_fallback，仍应通过；
+    # LITES 内核只依赖 numpy+标准库，离线确定性。
+    - name: New-technique server selftests (offline, hard gate)
+      shell: pwsh
+      run: |
+        $servers = @("server-ndir","server-crds","server-ftir","server-doas")
+        foreach ($s in $servers) {
+          Write-Host "=== $s ==="
+          Push-Location $s
+          python -X utf8 tools/$($s -replace 'server-','')_mcp.py --selftest
+          if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Error "$s selftest 失败"; exit 1 }
+          Pop-Location
+        }
+        Write-Host "=== server-lites ==="
+        Push-Location server-lites
+        python -X utf8 tools/lites_mcp.py --selftest
+        if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Error "server-lites selftest 失败"; exit 1 }
+        Pop-Location
+
+    # TDLAS 全链路自检需要访问 hitran.org，偶发网络/服务端抖动（代码内已带 3 次指数退避重试）；
+    # 因此不作为硬门禁，但失败会在日志里明确记录，便于区分"代码坏了"与"HITRAN 抖了"。
+    - name: TDLAS selftest (needs hitran.org)
+      continue-on-error: true
+      shell: pwsh
+      run: |
+        Push-Location server-tdlas
+        python -X utf8 tools/tdlas_mcp.py --selftest
+        Pop-Location

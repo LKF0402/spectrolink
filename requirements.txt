@@ -1,0 +1,17 @@
+# 运行期依赖（SpectroLink 全仓）
+# 注意：hitran-api 是发行名，import 名是 hapi（HAPI 1.x，免 API key）。
+# 装完后务必跑一次各 server 自检：python server-<tech>/tools/<tech>_mcp.py --selftest
+#
+# 版本约束理由：本工具承诺"同输入同输出"（默认 seed=0 可复现），而 numpy 的
+# 随机数流与 np.round 舍入行为跨大版本可能变化，故给上界以免静默改变数值结果。
+#
+# 各 server 依赖子集：
+#   - 全部 server：numpy, matplotlib（出图）, hitran-api（TDLAS/LITES/CRDS 取线表）
+#   - server-tdlas：numpy, scipy, matplotlib, hitran-api
+#   - server-lites：numpy, matplotlib, hitran-api（不用 scipy）
+#   - server-ndir / server-ftir / server-doas：numpy, scipy, matplotlib（纯离线）
+#   - spectrolink_core：numpy, scipy, hitran-api（独立包，pip install -e ./spectrolink_core）
+numpy>=1.24,<3
+matplotlib>=3.7,<4
+scipy>=1.10,<2
+hitran-api>=1.3,<2

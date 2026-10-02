@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data (运行期生成，不入库)
+Hitran_Data/
+tmp/
+xsc_data/
+*.log
+# 会话状态（运行时数据，含仿真工况，不入库）
+.tdlas_session.json
+# 设备库（用户命名的仪器参数，运行时数据，不入库）
+.tdlas_devices.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.key
+*.pem
+*.ppk
+config.local.json
+.env
+.env.*
+*.token
+*.secret
+credentials*.json
+id_rsa*
+id_ed25519*
+id_dsa*
+id_ecdsa*
+
+# Tunnel binary (downloaded at runtime, not source)
+cloudflared.exe
+cloudflared
+
+# Runtime logs (may contain ephemeral token, never commit)
+_link*.log
+.python/
+
+# 本地留存文档（不推远端）
+USAGE.md
+
+# 临时测试脚本（不推远端）
+_fix_*.py
+_test_*.py
+_debug_*.py
+_*.py
