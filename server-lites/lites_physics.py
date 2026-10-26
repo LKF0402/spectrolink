@@ -54,7 +54,7 @@ QTF2→QTF3 几何完全相同、Q 也几乎相同（10794 vs 10826），仅多�
   LITES 的信号由三个**可分离**的因子连乘决定，而不是由单一的 η_dev：
 
     V_2f ∝ (P·η_abs·A_opt)          ← 被气体吸收调制掉的热功率
-         × H_th(f_m)                 ← 热扩散低通
+         × H_th(f_m)                 ← 热波传递(1/√f, f≤f0/2 钳位)
          × [Q/f0] · Θ_mat · Θ_coat   ← 能量积累 × 材料热弹品质因子 × 涂层增益
          × H_mech(2f_m)              ← 共振峰对准（含 f0 温漂）
          × G_elec                    ← TIA / 电容 / 压电耦合
@@ -230,19 +230,19 @@ def optimal_2f_frequency(f0: float, q: float, w_m: float, mat: dict,
     2f 信号 ∝ |H_th(f_m)|·|H_mech(2f_m)| 的唯一主导项是机械共振
     H_mech(2f_m)（峰在 2f_m=f0）⇒ **最优 f_m = f0/2**（与文献一致：
     LITES 全部以 f0/2 调制、2f 落共振峰；Xu 2020 多气体 FDM 亦用 f0/2）。
+
+    【2026-10 修复】旧版用数值网格扫描找极值，默认 400 点间距 ~82 Hz，
+    而 3 dB 带宽仅 ~4 Hz（f0/Q）→ 没有任何网格点落入共振峰，argmax
+    只能取离 f0/2 最近的格点，导致 h_mech_at_opt 严重失真（0.024 vs 1.0）。
+    既然解析极值就是 f0/2，直接返回，不再做数值扫描。
     """
-    f = np.linspace(max(f0 * 1e-4, 1.0), f0, n_grid)
-    s = np.array([thermal_transfer(float(fi), w_m, mat,
-                                   f_ref_hz=f0 / 2.0)["mag"] for fi in f])
-    s *= mech_transfer(2.0 * f, f0, q)["mag"]
-    i = int(np.argmax(s))
-    f_opt = float(f[i])
-    at_half = float(s[int(np.argmin(np.abs(f - f0 / 2.0)))])
+    f_opt = f0 / 2.0
+    h_th = thermal_transfer(f_opt, w_m, mat, f_ref_hz=f0 / 2.0)["mag"]
+    h_mech = float(mech_transfer(2.0 * f_opt, f0, q)["mag"])
     return {"f_m_opt": f_opt, "f0_over_2": f0 / 2.0,
-            "gain_vs_f0half": (float(s[i]) / at_half) if at_half > 0 else float("nan"),
-            "h_th_at_opt": thermal_transfer(f_opt, w_m, mat,
-                                            f_ref_hz=f0 / 2.0)["mag"],
-            "h_mech_at_opt": float(mech_transfer(2.0 * f_opt, f0, q)["mag"]),
+            "gain_vs_f0half": 1.0,
+            "h_th_at_opt": h_th,
+            "h_mech_at_opt": h_mech,
             "tau_th": thermal_time(w_m, mat),
             "f_cut_th": 1.0 / (2.0 * math.pi * thermal_time(w_m, mat))}
 

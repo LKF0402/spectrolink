@@ -82,13 +82,13 @@ $$\tau_{acc} = \frac{Q}{\pi f_0}$$
 
 > ⚠ **早期版本的错误**：初版把"Q 值"直接当增益（$V \propto Q$），导致同一器件跨波段反解出的 $g$ 跨 80×。现改为 $\tau_{acc} = Q/(\pi f_0)$，并显式引入材料热弹品质因数 $\Theta$ 与涂层增益——这三者都**不随波长变**，于是"同器件跨波段 $g$ 一致"才成为**可检验的真判据**。
 
-### 2.3 热扩散低通把最优 2f 拖到 f0/2 以下
+### 2.3 热波传递与最优 f_m = f0/2
 
-$$\tau_{th} = \frac{w^2}{8D},\qquad H_{th}(f) = \frac{1}{\sqrt{1+(\omega\tau_{th})^2}},\qquad f_{cut}=\frac{1}{2\pi\tau_{th}}$$
+$$|H_{th}(f)| = \sqrt{\frac{f_{ref}}{f}},\quad f_{ref} = f_0/2,\quad f \le f_{ref} \text{ 时钳位 } |H_{th}|=1$$
 
-机械共振要求 $f_m \approx f_0/2$（使 $2f_m$ 落在共振峰），但热扩散是**低通**，$f_m$ 越高热波越被压制。
+机械共振要求 $f_m \approx f_0/2$（使 $2f_m$ 落在共振峰），热波传递在 $f_m=f_0/2$ 处无截止（$|H_{th}|=1$）。
 
-**净效果：最优 $f_m$ 低于 $f_0/2$** —— 与 QEPAS 的做法**相反**。
+**净效果：最优 $f_m = f_0/2$** —— 热学无压制，机械共振主导，与 QEPAS 做法相同。
 
 > 因此**不要**套用 QEPAS 的 $f_m = f_0/2$，必须用 `lites_sweep(var="f_m")` 实测扫描找最优。`optimal_2f_frequency()` 给出理论参考值，但实测扫描优先。
 
@@ -124,9 +124,9 @@ $$\Theta = \frac{\alpha_{te}\cdot d_{piezo}}{k_{th}}$$
 
 ```python
 D   = k_th / (rho * cp)                     # 热扩散率
-tau_th = w²/(8D)                            # 热时间常数
-H_th(f) = 1/sqrt(1 + (2π f tau_th)²)        # 热扩散低通
-f_cut  = 1/(2π tau_th)                      # 截止频率
+tau_th = w²/(8D)                            # 热时间常数（信息项）
+|H_th(f)| = sqrt(f_ref / f), f_ref=f0/2    # 热波半阶（f≤f_ref 钳位 1）
+f_cut  = f_ref                              # 热波参考频率
 ```
 
 ### 3.3 机械链（SDOF）
