@@ -544,30 +544,11 @@ def wms_harmonic_lockin(S, t, fs, fm, n, n_cycle_avg=1, n_stages=2,
           filtfilt（每级 2 次卷积），n_stages=2 时总 4 次 = sinc^4（比默认 2 次=sinc^2 零点更深）、峰位仍不变；仅在你想要更狠的低通时才开。
         注意：零相位 filtfilt 需整段记录、非因果 → **仅离线可用**，默认 False。
     """
-    w = 2.0 * np.pi * fm
-    S = np.asarray(S, dtype=float)
-    X = S * np.cos(n * w * t)
-    Y = S * np.sin(n * w * t)
-    if str(lock_kind).lower() == "butter":
-        from scipy.signal import butter as _butter, filtfilt as _ff, lfilter as _lf
-        b, a = _butter(int(n_stages), cutoff_ratio * fm / (0.5 * float(fs)), btype="low")
-        if zero_phase:
-            X, Y = _ff(b, a, X), _ff(b, a, Y)
-        else:
-            X, Y = _lf(b, a, X), _lf(b, a, Y)
-        return np.sqrt(X ** 2 + Y ** 2), X, Y
-    # boxcar（默认）：整数调制周期滑动平均
-    win = max(1, int(round(n_cycle_avg * fs / fm)))
-    ker = np.ones(win) / win
-    if zero_phase:
-        from scipy.signal import filtfilt as _ff
-        for _ in range(max(1, int(n_stages))):
-            X, Y = _ff(ker, [1.0], X), _ff(ker, [1.0], Y)
-    else:
-        for _ in range(max(1, int(n_stages))):
-            X = np.convolve(X, ker, mode="same")
-            Y = np.convolve(Y, ker, mode="same")
-    return np.sqrt(X ** 2 + Y ** 2), X, Y
+    from spectrolink_core.lockin import harmonic_demod_time
+    return harmonic_demod_time(S, t, fs, fm, n,
+                              n_cycle_avg=n_cycle_avg, n_stages=n_stages,
+                              lock_kind=lock_kind, cutoff_ratio=cutoff_ratio,
+                              zero_phase=zero_phase)
 
 
 def simulate_td(species="H2O", wn0=7185.596, T=296.0, P=1.0, x=0.1, L=30.0,
