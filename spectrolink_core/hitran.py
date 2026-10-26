@@ -16,13 +16,16 @@ HAPI 1.x 精简封装（自包含，不依赖外部仓库）。
 """
 from __future__ import annotations
 
+import os
 import threading
 import time
 from pathlib import Path
 
 import numpy as np
 
-_DATA_DIR = Path(__file__).resolve().parent.parent / "Hitran_Data"  # 仓库根共享线表缓存（core 位于仓库根下）
+# 缓存目录优先级：环境变量 SPECTROLINK_DATA_DIR > 用户目录 ~/.spectrolink/Hitran_Data > 仓库内
+_DEFAULT_DATA_DIR = Path.home() / ".spectrolink" / "Hitran_Data"
+_DATA_DIR = Path(os.environ.get("SPECTROLINK_DATA_DIR", str(_DEFAULT_DATA_DIR)))
 _DB_READY = False
 _SPECIES = None
 
@@ -46,9 +49,16 @@ def _hapi():
 
 def _ensure_db():
     """初始化 HAPI 线表缓存目录（进程内一次）。"""
-    global _DB_READY
+    global _DB_READY, _DATA_DIR
     if not _DB_READY:
-        _DATA_DIR.mkdir(parents=True, exist_ok=True)
+        _DATA_DIR = Path(_DATA_DIR)  # 兼容字符串传入
+        # 尝试建目录，失败就 fallback 到仓库内（兼容旧安装）
+        try:
+            _DATA_DIR.mkdir(parents=True, exist_ok=True)
+        except (PermissionError, OSError):
+            # 用户目录不可写 → 用仓库内 Hitran_Data
+            _DATA_DIR = Path(__file__).resolve().parent.parent / "Hitran_Data"
+            _DATA_DIR.mkdir(parents=True, exist_ok=True)
         _hapi().db_begin(str(_DATA_DIR))
         _DB_READY = True
 
@@ -381,3 +391,38 @@ def absorption(name, numin, numax, T=296.0, P=1.01325, step=5e-4, wingHW=20.0,
             _ALPHA_CACHE.pop(next(iter(_ALPHA_CACHE)), None)   # FIFO 淘汰，避免无界增长
         _ALPHA_CACHE[key] = val
     return val[0].copy(), val[1].copy(), dict(val[2])
+
+
+def absorption_mixture(gases, numin, numax, T=296.0, P=1.01325, step=5e-4, wingHW=20.0,
+                         wn_grid=None):
+    """混合气吸收系数 α_total(ν) = Σ x_i · α_pure_i(ν)。
+
+    参数:
+        gases: list of (name, mole_fraction)，如 [("CO", 6e-6), ("H2O", 0.015)]
+        wn_grid: 可选，统一波数网格。不传则自动取第一个气体的网格。
+
+    返回: (nu, alpha_total, alpha_per_species)
+        nu: 统一波数网格
+        alpha_total: 总吸收系数 cm^-1
+        alpha_per_species: dict {name: alpha_i}，每个都已插值到统一网格
+    """
+    if wn_grid is None:
+        # 第一个气体决定网格
+        first_name, first_x = gases[0]
+        nu0, alpha0, _ = absorption(first_name, numin, numax, T=T, P=P, step=step, wingHW=wingHW)
+        wn_grid = nu0.copy()
+        alpha_total = first_x * alpha0
+        alpha_per = {first_name: alpha0.copy()}
+    else:
+        wn_grid = np.asarray(wn_grid, dtype=float)
+        alpha_total = np.zeros_like(wn_grid)
+        alpha_per = {}
+
+    for name, x in gases[1 if wn_grid is None else 0:]:
+        nu_i, alpha_i, _ = absorption(name, numin, numax, T=T, P=P, step=step, wingHW=wingHW)
+        # 插值到统一网格
+        alpha_interp = np.interp(wn_grid, nu_i, alpha_i)
+        alpha_per[name] = alpha_interp
+        alpha_total += x * alpha_interp
+
+    return wn_grid, alpha_total, alpha_per

@@ -806,6 +806,38 @@ LASER_DEFAULTS = {
     "am_psi1": np.pi / 2,    # RAM 相对 FM 相位差（rad），正交近似
     "am_psi2": 0.0,
 }
+
+# 常用激光器预设（demo 参数，不是真实器件 datasheet）
+# 用户真实设备请存到 ~/.spectrolink/devices.json（gitignore），不要进仓库
+PRESET_LASERS = {
+    "dfb_1650nm_ch4": {
+        "species": "CH4",
+        "wn_ref": 2964.7,      # 3373 nm
+        "dnu_dI": -0.088,       # cm^-1/mA
+        "eta_VI": 24.0,         # mA/V
+        "i_th": 30.0,           # mA
+        "eta_IP": 0.15,         # mW/mA
+        "note": "Demo DFB, 1.65 μm CH4 band",
+    },
+    "icl_4p6um_co": {
+        "species": "CO",
+        "wn_ref": 2180.0,       # 4.59 μm
+        "dnu_dI": -0.05,        # cm^-1/mA (ICL 调谐系数比 DFB 小)
+        "eta_VI": 20.0,         # mA/V
+        "i_th": 40.0,           # mA (ICL 阈值电流典型 30-50 mA)
+        "eta_IP": 0.1,          # mW/mA (ICL 效率比 DFB 低)
+        "note": "Demo ICL, 4.6 μm CO band",
+    },
+    "icl_3p3um_ch4": {
+        "species": "CH4",
+        "wn_ref": 3030.0,       # 3.30 μm
+        "dnu_dI": -0.06,
+        "eta_VI": 20.0,
+        "i_th": 35.0,
+        "eta_IP": 0.12,
+        "note": "Demo ICL, 3.3 μm CH4 band",
+    },
+}
 OPTICS_DEFAULTS = {"throughput": 0.90}   # 光学元件总透过率（窗片/镜片/光纤/连接器，统一折成一个数）
 # 说明：throughput 已将光路中所有透过率（镜片反射/镀膜/窗片/光纤耦合）折叠成单一标量；
 # 有效光程 L（气体吸收路径）是**独立参数**，见 GAS_DEFAULTS["L_cm"]（多通池≈增大 L、并相应调 throughput）。
