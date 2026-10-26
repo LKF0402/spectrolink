@@ -416,14 +416,11 @@ def _quad_demod_profile(alpha_prof, nu, hwhm, mod_depth_cm1,
     I_t = (1.0 - A_t) * (1.0 + am_frac * c1[None, :])
     X = 2.0 * np.mean(I_t * c2[None, :], axis=1)
     Y = 2.0 * np.mean(I_t * s2[None, :], axis=1)
+    # 相位旋转 + 幅值：调用 spectrolink_core.lockin 公共实现
+    from spectrolink_core.lockin import phase_rotate
     ic = int(np.argmin(np.abs(nu)))
-    phi = math.atan2(Y[ic], X[ic])
-    if X[ic] * math.cos(phi) + Y[ic] * math.sin(phi) < 0.0:
-        phi += math.pi
-    Xp = X * math.cos(phi) + Y * math.sin(phi)
-    # 幅值口径：R2f = √(X²+Y²)，与参考相位无关（工程锁相输出幅值，单峰无负瓣）
-    R2f = np.sqrt(X * X + Y * Y)
-    return {"X": X, "Y": Y, "Xp": Xp, "R2f": R2f, "phi_opt_rad": phi}
+    res = phase_rotate(X, Y, center_idx=ic)
+    return {"X": X, "Y": Y, "Xp": res["Xp"], "R2f": res["R"], "phi_opt_rad": res["phi_opt_rad"]}
 
 
 def lites_waveform(device=lph.DEFAULT_DEVICE, power_mW=None, x=None,
