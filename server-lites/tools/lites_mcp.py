@@ -1190,7 +1190,7 @@ TOOLS = [{
             },
             "device": {
                 "type": "string",
-                "description": "器件键名（内置默认 qtf-commercial-decapped，用户可自定义器件后传入）；用 lites_device(action='list') 查全部",
+                "description": "器件键名，如 qtf-commercial-decapped / qtf-commercial-decapped（默认）/用 lites_device(action='list') 查全部",
             },
             "x": {
                 "type": "number",

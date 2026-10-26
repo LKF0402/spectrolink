@@ -84,6 +84,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+import qtf_eta  # QTF 器件全波段吸收率 κ_A(λ)（η_dev 波长化）
+
 import numpy as np
 
 # ══════════════════════════════════════════════════════════════════════
@@ -434,6 +436,7 @@ class LitesDevice:
     #   否则 g 会把波段相关的器件吸收一并吃掉（见 _solve_gain 的说明）。
     cal_power_W: float = 3.5e-3
     cal_eta_abs: float = 1.0e-3              # —   器件自身吸收比（cal 波段）
+    cal_wl_um: float = qtf_eta.CAL_WL_UM_DEFAULT  # µm  标定波段波长（η_dev 波长化基准）
     cal_meas_f2_V: float = 5.0e-3            # V   实测 2f 峰值电压
     cal_mod_depth_cm1: float = 0.5
     cal_species: str = ""                    # 锚点物种（仅报告用）
@@ -533,7 +536,22 @@ class LitesDevice:
         return (self._g * h_th * h_m * acc
                 * (qc / self.c_total) * self._fom["coating_gain"])
 
-    def effective_eta_abs(self, alpha_gas_cm1: float, L_gas_cm: float) -> float:
+    def eta_dev_at(self, wn_cm1: float | None = None) -> float:
+        """波长相关器件吸收比 η_dev(λ) = cal_eta_abs · κ_A(λ)/κ_A(λ_cal)。
+
+        cal_eta_abs 是**标定波段**的反推吸收比（绝对量级由实测锚定）；
+        κ_A(λ) 来自 QTF 全波段吸收率仿真（qtf_eta：Rakić 银表 + Franta 石英表，
+        商用裸音叉 250 µm 振臂/0.5 µm 镀银/75% 覆盖率，非相干多层膜递推）。
+        跨波长信号比 = κ_A(λ)/κ_A(λ_cal)——这是 LITES 波长依赖的第一性来源，
+        以前被塞进"每波段单独标定 η_dev"的缺口（must_calibrate）里。
+        """
+        if wn_cm1 is None:
+            return float(self.cal_eta_abs)
+        return float(self.cal_eta_abs) * qtf_eta.eta_dev_scale(
+            qtf_eta.wn_to_wl_um(wn_cm1), self.cal_wl_um)
+
+    def effective_eta_abs(self, alpha_gas_cm1: float, L_gas_cm: float,
+                          wn_cm1: float | None = None) -> float:
         """气体吸收线处的**减光口径**器件吸收比 η_abs(ν)。
 
         ⚠ 文献修正（2026-10）：旧版 η_abs = η_dev + (1−η_dev)·[1−e^{−αL}]
@@ -552,7 +570,7 @@ class LitesDevice:
         LiNTF 6× 均由此路径放大）。
         """
         a = math.exp(-max(alpha_gas_cm1, 0.0) * max(L_gas_cm, 0.0))
-        return self.cal_eta_abs * a
+        return self.eta_dev_at(wn_cm1) * a
 
     def _solve_gain(self) -> float:
         """由实测锚点反解增益 g，使 g·V_raw(锚点) = V_meas。
@@ -584,7 +602,8 @@ class LitesDevice:
                            alpha_gas_cm1: float = 0.0, L_gas_cm: float = 0.0,
                            f_m: float | None = None,
                            eta_abs: float | None = None,
-                           mod_depth_cm1: float | None = None) -> dict:
+                           mod_depth_cm1: float | None = None,
+                           wn_cm1: float | None = None) -> dict:
         """预测 LITES 的 2f 峰值电压 V（含标定增益）。
 
         参数口径（与 TDLAS 不同，务必看清）：
@@ -592,6 +611,9 @@ class LitesDevice:
             挖走多少功率，从而得到 Δη_abs —— 即信号的浓度依赖部分。
           · eta_abs 可直接覆盖器件吸收比；不给则用 cal_eta_abs 作为
             "线外"基线。
+          · wn_cm1 给出吸收线中心波数时，η_dev 按 QTF 全波段吸收率
+            κ_A(λ)/κ_A(λ_cal) 波长化（qtf_eta）——同一器件跨波段的
+            信号比 = 器件吸收率比。不给则保持原 cal_eta_abs 口径。
 
         调制深度对 2f 幅值的影响：2f 峰高在 m ≈ 2.2（m = a/HWHM）处取极大，
         与 WMS 同源。这里用经验峰形因子归一到 m=2.2：
@@ -617,7 +639,7 @@ class LitesDevice:
         #
         # 兼容路径：eta_abs 显式给出 → 完全覆盖（v_on=chain(eta_abs)，
         # 不叠加气体项，避免重复计入；此时 v_am=v_delta=0）。
-        eta_on = (self.effective_eta_abs(alpha_gas_cm1, L_gas_cm)
+        eta_on = (self.effective_eta_abs(alpha_gas_cm1, L_gas_cm, wn_cm1)
                   if eta_abs is None else float(eta_abs))
 
         # 调制深度的 2f 峰形因子 F(m)：峰在 m≈2.2，归一到 F(2.2)=1。
@@ -648,13 +670,22 @@ class LitesDevice:
         chain = self._chain_v(power_W, fm, self.cal_eta_abs) * f_shape
         eta_gas = 1.0 - math.exp(-max(alpha_gas_cm1, 0.0)
                                  * max(L_gas_cm, 0.0))
+        # η_dev 波长化：chain 线性于 η_abs ⇒ chain_w = chain · κ_A(λ)/κ_A(λ_cal)
+        scale = 1.0
+        wl_um = kappa_wl = kappa_cal = None
+        if eta_abs is None and wn_cm1 is not None:
+            wl_um = qtf_eta.wn_to_wl_um(wn_cm1)
+            scale = qtf_eta.eta_dev_scale(wl_um, self.cal_wl_um)
+            kappa_wl = qtf_eta.kappa_A(wl_um)
+            kappa_cal = qtf_eta.kappa_A(self.cal_wl_um)
+        chain_w = chain * scale
         if eta_abs is not None:
             v_am, v_delta = 0.0, 0.0
             v_on = self._chain_v(power_W, fm, float(eta_abs)) * f_shape
             eta_on = float(eta_abs)
         else:
-            v_am = chain * self.am_2f_frac
-            v_delta = chain * eta_gas
+            v_am = chain_w * self.am_2f_frac
+            v_delta = chain_w * eta_gas
             v_on = v_am + v_delta
 
         q = power_W * max(eta_on, 1e-15)
@@ -669,6 +700,10 @@ class LitesDevice:
                "eta_abs": eta_on, "eta_gas_frac": eta_gas,
                "am_2f_frac": self.am_2f_frac, "dT_osc_K": dT, "strain": eps,
                "charge_C": qc, "Q_dep_W": q,
+               # η_dev 波长化（qtf_eta 全波段吸收率）：无 wn_cm1 时为 None
+               "eta_dev_wl": self.cal_eta_abs * scale if scale != 1.0 else None,
+               "kappa_A_wl": kappa_wl, "kappa_A_cal": kappa_cal,
+               "eta_dev_scale": scale, "wl_um": wl_um,
                # m / F_m_raw 在未给 mod_depth_cm1 时为 None（**不可用 NaN**，
                # 见上文注释）。m_note 说明原因，便于调用方披露。
                "m": m, "F_m": f_shape, "F_m_raw": f_raw, "m_note": m_reason,

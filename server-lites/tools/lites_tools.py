@@ -54,6 +54,7 @@ for _p in (_ROOT, _SRV):
         sys.path.insert(0, str(_p))
 
 import lites_physics as lph  # noqa: E402
+import qtf_eta  # noqa: E402  QTF 全波段吸收率（η_dev 波长化）
 
 try:
     from spectrolink_core import hitran as _hitran
@@ -162,7 +163,8 @@ def peak_alpha(s_line: float, T: float, P: float, x: float,
 def lites_forward(device=lph.DEFAULT_DEVICE, power_mW=None, x=None,
                   line_strength=None, L_gas_cm=None, T=296.0, P=1.01325,
                   gamma_L=0.06, f_m=None, mod_depth_cm1=None,
-                  f0_shift_ppm=0.0, eta_spurious=None, species=None):
+                  f0_shift_ppm=0.0, eta_spurious=None, species=None,
+                  wn_cm1=None):
     """预测 LITES 的 2f 峰值电压，并**显式分解**"线外本底"与"气体贡献"。
 
     这是 LITES 最容易被误读的地方，所以本工具强制把三项分开返回
@@ -196,6 +198,16 @@ def lites_forward(device=lph.DEFAULT_DEVICE, power_mW=None, x=None,
         f_m = d.f0 / 2.0
         assume.append(f"f_m 未给出，取 f0/2 = {f_m:.1f} Hz（LITES 常规做法）")
 
+    if wn_cm1 is not None:
+        _wl = 1.0e4 / float(wn_cm1)
+        _scale = d.eta_dev_at(wn_cm1) / d.cal_eta_abs
+        assume.append(
+            f"wn_cm1={float(wn_cm1):.3f} cm-1 (λ={_wl:.3f} um) 已启用 η_dev "
+            f"波长化：κ_A={100*qtf_eta.kappa_A(_wl):.3f}% (基准 κ_A(cal)="
+            f"{100*qtf_eta.kappa_A(d.cal_wl_um):.3f}%)，信号 x{_scale:.3f}"
+            "（QTF 全波段吸收率模型：Rakić 银表 + Franta 石英表）"
+        )
+
     alpha = peak_alpha(line_strength, T, P, x, gamma_L)
     alpha_eff = alpha
     if f0_shift_ppm:
@@ -208,7 +220,8 @@ def lites_forward(device=lph.DEFAULT_DEVICE, power_mW=None, x=None,
         assume.append(f"f0_shift_ppm={f0_shift_ppm} 已折算为机械失谐衰减")
 
     p = d.predict_2f_voltage(float(power_mW) * 1e-3, alpha_eff, float(L_gas_cm),
-                             f_m=float(f_m), mod_depth_cm1=mod_depth_cm1)
+                             f_m=float(f_m), mod_depth_cm1=mod_depth_cm1,
+                             wn_cm1=wn_cm1)
 
     sp = d.spurious_2f(float(power_mW) * 1e-3, eta_spurious=eta_spurious)
 
@@ -240,6 +253,11 @@ def lites_forward(device=lph.DEFAULT_DEVICE, power_mW=None, x=None,
             "phi_th_deg": p["phi_th_deg"],
             "eta_abs_online": p["eta_abs"],
             "eta_abs_offline": d.cal_eta_abs,
+            "eta_dev_wl": p.get("eta_dev_wl"),
+            "kappa_A_at_wn": p.get("kappa_A_wl"),
+            "kappa_A_at_cal": p.get("kappa_A_cal"),
+            "eta_dev_scale": p.get("eta_dev_scale"),
+            "wl_um": p.get("wl_um"),
             "dT_osc_K": p["dT_osc_K"],
             "strain": p["strain"],
             "V_2f_spurious_V": sp["V_2f_spurious"],
@@ -592,11 +610,13 @@ def _plot_waveform(d, nu, alpha_prof, demod, sigma, cond,
     _mpl_cjk()
 
     plt.rcParams.update({
-        "font.size": 10.5, "axes.grid": True, "grid.alpha": 0.3,
+        "font.size": 9, "axes.grid": False,
         "figure.facecolor": "white", "axes.facecolor": "white",
+        "axes.spines.top": False, "axes.spines.right": False,
+        "xtick.direction": "in", "ytick.direction": "in",
     })
 
-    fig, ax = plt.subplots(3, 2, figsize=(11, 9))
+    fig, ax = plt.subplots(3, 2, figsize=(11, 14))
 
     f0 = float(d.f0)
     T_scan = 1.0 / float(cond["f_scan_Hz"])
@@ -625,13 +645,8 @@ def _plot_waveform(d, nu, alpha_prof, demod, sigma, cond,
     for tt in (T_scan * 0.25, T_scan * 0.75):
         ax[0, 0].axvspan(tt - 0.6 * T_scan / n * 5, tt + 0.6 * T_scan / n * 5,
                          color="gray", alpha=0.25)
-    ax[0, 0].set_title(f"(a) 音叉电信号 — DC 透射包络（吸收凹陷 {aL*100:.2f}%）")
     ax[0, 0].set_xlabel("时间 t (s)")
-    ax[0, 0].set_ylabel("T = exp(−αL)（归一）")
-    ax[0, 0].annotate("吸收区", xy=(T_scan * 0.25, 1.0 - 3.0 * aL),
-                      xytext=(T_scan * 0.25, -0.13), ha="center", fontsize=8.5,
-                      arrowprops=dict(arrowstyle="->", lw=0.6),
-                      xycoords="data", textcoords="axes fraction")
+    ax[0, 0].set_ylabel("T = exp(−αL)")
 
     # ── ② 音叉电信号：载波细节（AC 耦合）───────────────────────
     # 实验示波器 AC 耦合视角：去 DC 后可见 f0 载波，包络 = 正交 2f 分量
@@ -641,31 +656,20 @@ def _plot_waveform(d, nu, alpha_prof, demod, sigma, cond,
     env_abs = v_delta
     v_ac = v_base + env_abs * np.cos(2.0 * np.pi * f0 * t_us * 1e-6)
     ax[0, 1].plot(t_us, v_ac * 1e6, lw=0.8, color="#d62728")
-    ax[0, 1].axhline(v_base * 1e6, ls="--", c="gray", lw=0.6,
-                     label=f"残余 AM 本底 {v_base*1e6:.3f} μV")
-    ax[0, 1].axhline((v_base + env_abs) * 1e6, ls=":", c="b", lw=0.7,
-                     label=f"载波包络 ±{env_abs*1e6:.2f} μV")
-    ax[0, 1].set_title(f"(b) 音叉电信号 — 载波细节（AC 耦合，f$_0$={f0/1e3:.1f} kHz）")
+    ax[0, 1].axhline(v_base * 1e6, ls="--", c="gray", lw=0.6, label="本底")
+    ax[0, 1].axhline((v_base + env_abs) * 1e6, ls=":", c="b", lw=0.7, label="包络")
     ax[0, 1].set_xlabel("时间 t (μs)")
     ax[0, 1].set_ylabel("V$_{AC}$ (μV)")
-    ax[0, 1].legend(fontsize=8.5, loc="lower right")
+    ax[0, 1].legend(fontsize=8, loc="lower right")
 
     # ── ③ 正交解调幅值 R2f = √(X²+Y²)（与相位无关）───────────────
-    ax[1, 0].plot(nu, R2f_c * 1e6, lw=1.6, color="#d62728",
-                  label="R$_{2f}$ 幅值（√(X²+Y²)）")
+    ax[1, 0].plot(nu, R2f_c * 1e6, lw=1.6, color="#d62728", label="R$_{2f}$")
     if v2f_n is not None:
         ax[1, 0].plot(nu, (v2f_n - v_base) * 1e6, lw=0.7, alpha=0.6,
-                      color="#7f7f7f", label=f"含噪 σ={sigma*1e6:.2f} μV")
-    pk = int(np.argmax(R2f_c))
-    ax[1, 0].annotate(f"峰值 {R2f_c[pk]*1e6:.1f} μV",
-                      xy=(nu[pk], R2f_c[pk] * 1e6),
-                      xytext=(float(np.min(nu)) + 0.06 * (float(np.max(nu)) - float(np.min(nu))),
-                              R2f_c[pk] * 1e6 * 0.85), fontsize=8.5,
-                      arrowprops=dict(arrowstyle="->", lw=0.6))
-    ax[1, 0].set_title("(c) 正交解调幅值 R$_{2f}$ = √(X²+Y²)")
+                      color="#7f7f7f", label="含噪")
     ax[1, 0].set_xlabel(r"波数 (cm$^{-1}$)" if gas_name else r"相对波数 (cm$^{-1}$)")
     ax[1, 0].set_ylabel("R$_{2f}$ (μV)")
-    ax[1, 0].legend(fontsize=8.5)
+    ax[1, 0].legend(fontsize=8)
 
     # ── ④ 多浓度 R2f 谱对比 ────────────────────────────────────
     x_ref = float(cond["x"])
@@ -686,11 +690,10 @@ def _plot_waveform(d, nu, alpha_prof, demod, sigma, cond,
         Rq_c = Rq * k_cal
         if xq == 0:
             ax[1, 1].plot(nu, Rq_c * 1e6, lw=1.0, color=cmap_m[j], ls=":",
-                          label="0 ppm（本底）")
+                          label="0 ppm")
         else:
             ax[1, 1].plot(nu, Rq_c * 1e6, lw=1.1, color=cmap_m[j],
-                          label=f"{xq*1e6:.0f} ppm（峰 {np.max(Rq_c)*1e6:.1f} μV）")
-    ax[1, 1].set_title("(d) 多浓度 R$_{2f}$ 谱对比（正交解调幅值）")
+                          label=f"{xq*1e6:.0f} ppm")
     ax[1, 1].set_xlabel(r"波数 (cm$^{-1}$)" if gas_name else r"相对波数 (cm$^{-1}$)")
     ax[1, 1].set_ylabel("R$_{2f}$ (μV)")
     ax[1, 1].legend(fontsize=7.5, ncol=2)
@@ -714,16 +717,15 @@ def _plot_waveform(d, nu, alpha_prof, demod, sigma, cond,
     mlin = xs <= 20e-6
     slope, intercept = np.polyfit(xs[mlin] * 1e6, vds[mlin] * 1e6, 1)
     ax[2, 0].plot(xs * 1e6, vds * 1e6, "o-", color="#1f77b4", lw=1.2,
-                  label="R$_{2f}$ 峰高")
+                  label="R$_{2f}$")
     ax[2, 0].plot(xs[mlin] * 1e6, np.polyval([slope, intercept],
                                              xs[mlin] * 1e6), "--",
-                  color="#2ca02c", label=f"线性拟合 S={slope:.3e} μV/ppm")
+                  color="#2ca02c", label="线性拟合")
     ax[2, 0].axvspan(20, 100, color="orange", alpha=0.08,
-                     label="饱和区（αL 偏离线性）")
-    ax[2, 0].set_title("(e) 标定曲线：R$_{2f}$ 峰高 vs 浓度")
-    ax[2, 0].set_xlabel("浓度 x (ppm)")
-    ax[2, 0].set_ylabel("R$_{2f}$ 峰高 (μV)")
-    ax[2, 0].legend(fontsize=8.5)
+                     label="饱和区")
+    ax[2, 0].set_xlabel("浓度 (ppm)")
+    ax[2, 0].set_ylabel("R$_{2f}$ (μV)")
+    ax[2, 0].legend(fontsize=8)
 
     # ── ⑥ Allan 方差（浓度口径，1 Hz × 2 h）────────────────────
     fs_a = 1.0
@@ -741,31 +743,18 @@ def _plot_waveform(d, nu, alpha_prof, demod, sigma, cond,
     i_opt = int(np.argmin(adev))
     tau_opt, sigma_min = tau_a[i_opt], adev[i_opt]
     ax[2, 1].loglog(tau_a, adev, "-o", color="#1f77b4", lw=1.1, ms=2.5,
-                    label="Allan 偏差 σ_y(τ)")
+                    label="Allan 偏差")
     tau_ref = tau_a[tau_a >= 1.0]
     ax[2, 1].loglog(tau_ref, sigma_c_1s_ppm / np.sqrt(tau_ref), "--",
                     color="#2ca02c", lw=1.0,
-                    label=r"白噪声极限 $\sigma_1\tau^{-1/2}$")
+                    label=r"白噪声极限")
     ax[2, 1].axvline(tau_opt, ls=":", color="#d62728", lw=1.0)
     ax[2, 1].axhline(sigma_min, ls=":", color="#d62728", lw=1.0)
-    ax[2, 1].annotate(
-        f"τ$_opt$={tau_opt:.0f} s → MDL$_{{opt}}$={sigma_min:.2f} ppm (1σ)",
-        xy=(tau_opt, sigma_min), xytext=(tau_opt * 0.5, sigma_min * 1.8),
-        fontsize=8.5, color="#d62728",
-        arrowprops=dict(arrowstyle="->", lw=0.6))
-    ax[2, 1].set_title("(f) Allan 方差（1 Hz × 2 h，白 + 1/f + 漂移 2.0 ppm/h）")
     ax[2, 1].set_xlabel("平均时间 τ (s)")
-    ax[2, 1].set_ylabel("Allan 偏差 σ$_y$(τ) (ppm)")
-    ax[2, 1].legend(fontsize=8.5)
+    ax[2, 1].set_ylabel("σ$_y$(τ) (ppm)")
+    ax[2, 1].legend(fontsize=8)
 
-    _ttl = (f"LITES 仪器级仿真 · {gas_name} 真实波段" if gas_name
-            else "LITES 仪器级仿真（R$_{{2f}}$ 正交解调幅值）")
-    fig.suptitle(
-        f"{_ttl} — {d.name} | {cond['power_mW']:.2f} mW, "
-        f"x={cond['x']:.2e}, L={cond['L_gas_cm']:.1f} cm, "
-        f"f$_m$={cond['f_m_Hz']:.0f} Hz, m={cond['m']:.2f}",
-        fontsize=12, wrap=True)
-    fig.tight_layout(rect=[0, 0, 1, 0.97])
+    fig.tight_layout()
 
     if out_path is None:
         out_dir = _ROOT / "outputs"

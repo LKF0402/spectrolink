@@ -64,3 +64,12 @@ _fix_*.py
 _test_*.py
 _debug_*.py
 _*.py
+
+# Local config (not for repo)
+config.json
+local/
+.provenance/
+*.pyc
+__pycache__/
+
+server-tdlas/local/
