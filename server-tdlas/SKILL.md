@@ -71,6 +71,18 @@ description: SpectroLink 子服务器 server-tdlas（L2 参考，AI 自动读取
 6. 1f 与 2f 不同格
 7. **AI 出图后必须自查**（Read 图检查坐标轴/峰值/字体），修好再交付
 
+## C+. 中红外激光器预设（PRESET_LASERS）
+
+`tdlas_sim.py` 内置 demo 激光器预设，快速跑通中红外波段仿真：
+
+| 预设名 | 波段 | 目标气体 | 说明 |
+|---|---|---|---|
+| `dfb_1650nm_ch4` | 1.65 μm | CH₄ | 近红外 DFB demo |
+| `icl_4p6um_co` | 4.6 μm | CO | 中红外 ICL demo |
+| `icl_3p3um_ch4` | 3.3 μm | CH₄ | 中红外 ICL demo |
+
+> 这些是 **demo 参数**，不是真实器件 datasheet。真实设备请存到 `~/.spectrolink/devices.json`（gitignore），不要进仓库。
+
 ## D. 设备库与整机打包
 
 ### 设备库 action
