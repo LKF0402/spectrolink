@@ -363,8 +363,8 @@ def lites_sweep(device=lph.DEFAULT_DEVICE, var="power_mW", values=None,
         notes.append(
             f"热-机械联合最优 f_m = {opt['f_m_opt']:.1f} Hz，"
             f"f0/2 = {opt['f0_over_2']:.1f} Hz。"
-            f"注意 LITES 的最优 f_m **通常低于** f0/2（热扩散低通），"
-            f"这与 QEPAS 相反。"
+            f"最优 f_m ≈ f0/2（2f 落机械共振峰）；本模型下热学在 f0/2 无截止，"
+            f"热-机械联合极值即 f0/2，与 QEPAS 相同。"
         )
 
     return {
@@ -1491,9 +1491,9 @@ _GUIDE = {
         "body": (
             "V_2f = g · (P·η_abs·T_opt) · |H_th(f_m)| · τ_acc · (ΔT→ε→Q_c) "
             "· |H_mech(2f_m)| / C_total · Θ_coat\n"
-            "  η_abs(ν) = η_dev + (1−η_dev)[1−exp(−α_gas·L)]   ← 关键\n"
+            "  η_abs(ν) = η_dev · exp(−α_gas(ν)·L_gas)   ← 减光口径：气体把光挖掉，器件只吸残余光\n"
             "  τ_acc = Q/(π·f0)         能量积累时间（越低频越灵敏）\n"
-            "  H_th  = 1/√(1+(ω τ_th)²) 热扩散低通，τ_th = w²/(8D)\n"
+            "  |H_th(f)| = √(f_ref/f), f_ref=f0/2   热波半阶（f≤f_ref 钳位 1，无截止）\n"
             "  H_mech= 1/√(1+Q²(f/f0−f0/f)²)  机械共振\n"
             "  Θ_mat = α_te·d_piezo/k_th      材料热弹品质因子\n"
         ),

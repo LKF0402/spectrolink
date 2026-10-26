@@ -241,7 +241,7 @@ EFFECTS = [
          evidence=[],
          params=[],
          limit="未实现自动寻优；mod_depth_cm1 需调用方自行扫描。"
-               "受热扩散低通影响，LITES 的最优 m **小于** TDLAS 的经典值 2.2"),
+               "受 Voigt 线型与 WMS 谐波产生影响，最优 m 约 2.2（与 TDLAS 一致）"),
 ]
 
 
