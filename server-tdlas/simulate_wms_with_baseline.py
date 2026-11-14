@@ -13,18 +13,17 @@ baseline_das: 两列文件 (wavenumber_cm-1, voltage_V) —— 氮气背景不�
 baseline_wms: 两列文件 (time_s, voltage_V) —— 氮气背景调制的原始信号（含 RAM）
 """
 import os, sys, argparse
+from pathlib import Path
 import numpy as np
 
-# SpectroLink 路径
-sys.path.insert(0, r"spectrolink")
+# SpectroLink 路径：本脚本位于 <repo>/server-tdlas/，仓库根为其上一级
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import spectrolink_core.hitran as H
 
-# 缓存目录：优先环境变量，其次 workspace 里已有的
-from pathlib import Path
-import os
-_ws = Path(r"~/.spectrolink") / "Hitran_Data"
-H._DATA_DIR = Path(os.environ.get("SPECTROLINK_DATA_DIR", str(_ws)))
-H._DB_READY = False
+# 缓存目录：优先环境变量；未设置则沿用 core 默认（~/.spectrolink/Hitran_Data）
+if os.environ.get("SPECTROLINK_DATA_DIR"):
+    H._DATA_DIR = Path(os.environ["SPECTROLINK_DATA_DIR"])
+    H._DB_READY = False
 
 
 def load_two_col(filename):

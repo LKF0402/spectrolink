@@ -9,8 +9,8 @@ HAPI 1.x 精简封装（自包含，不依赖外部仓库）。
 有意**不使用 HAPI2**（其官方 v2 API 需 key，配置麻烦），故本模块完全免 key。
 
 设计纪律（沿用 hitran-mcp 的审计结论）：
-  · 窗口安全：线表必须真正覆盖请求窗口，否则按窗口重抓 —— 避免"旧表静默缺线"
-    被误读成"该气体无吸收"；
+  · 窗口安全：线表必须真正覆盖请求窗口**及其翼宽**（窗外 ±fetch_margin 的线其翼
+    仍会落进计算窗，只抓窗内线会静默偏低，实测窗左缘 −2.74%），否则按窗口重抓；
   · 空谱硬报错：窗口内 0 条线 / 抓取失败直接 raise，绝不静默返回平谱；
   · 单位：波数 cm^-1、温度 K、压力 atm、线翼半宽 cm^-1。
 """
@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import threading
 import time
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -110,6 +111,32 @@ def _wnum(v):
 _FETCH_TRIES = 3
 _FETCH_BACKOFF = 1.0            # 秒；重试间隔 1s → 2s（指数退避）
 
+# ── 抓取窗的外扩量 ──────────────────────────────────────────────────
+# 为什么必须外扩：HAPI 的 `WavenumberWingHW` 以 **HWHM 倍数** 为单位
+# （hapi.py:53709 `OmegaWingF = max(OmegaWing, OmegaWingHW*GammaMax)`），
+# 且选线循环（hapi.py:53672）遍历**表内每一条线**、不按输出窗口过滤 ——
+# 因此"窗外线"只要在表里，其翼仍经 ν0±ΩWingF 落进计算窗；只抓窗内线，
+# 这部分贡献被**静默丢弃**（不报错、不提示）。
+# 实测（CH4, 2967.6–2969.2 cm-1, wingHW=20, 296 K/1 atm）：
+#   dW=0.0 → 窗左缘 −2.74%、窗右缘 −0.42%、全网格最大 −2.74%、均值 −0.12%
+#   dW=1.0 → 全网格最大 −0.01%      （耗时 0.030→0.051 s）
+#   dW=1.6 → 全网格最大 −0.00%      （耗时 0.069 s）
+#   dW=20  → 参照                   （耗时 0.408 s，8 倍于 dW=1.6 却无进一步收益）
+# 故外扩量按物理翼宽 ΩWingHW·Γ 定，扫到饱和点即止；Γ ∝ P（洛伦兹展宽）。
+_GAMMA_REF_CM = 0.08            # 1 atm 空气浴下洛伦兹 HWHM 的保守上限（cm-1）
+_FETCH_DW_MIN_CM = 1.5          # 下限：保证默认 wingHW=20 时到达实测饱和点
+
+
+def fetch_margin(wingHW=20.0, P=1.01325):
+    """抓取线表相对**计算窗**的单边外扩量（cm-1）。
+
+    覆盖 ΩWingHW·GammaMax 的实际翼宽：Γ ∝ P，故含 P 因子；另设下限 1.5 cm-1，
+    保证默认 wingHW=20 时落在实测饱和点（dW≥1.0 已把窗缘偏差压到 0.01% 以内）。
+    """
+    return max(_FETCH_DW_MIN_CM,
+               _GAMMA_REF_CM * float(wingHW) * max(1.0, float(P)))
+
+
 
 def _is_transient(e):
     """判断抓取失败是否属"网络/服务端暂时故障"（可重试）而非"该窗口无数据"（重试无用）。
@@ -158,6 +185,30 @@ def _coverage(table):
         return None
 
 
+def _loaded_covering(base, numin, numax):
+    """已加载的同分子/同位素表中，覆盖 [numin, numax] 的**最小**一张；无则 None。
+
+    为什么需要：抓取窗带 ±dW 外扩后，计算窗略有变化就会生成一个几乎相同的表名
+    （如 CH4_6_1_2965p979_2970p821 与 CH4_6_1_2966_2971），若不复用，用户已有的
+    缓存会全部失效、每换一次窗口就重下一整张表。取行数最少的一张以省计算时间。
+    """
+    h = _hapi()
+    try:
+        names = h.tableList()
+    except Exception:
+        return None
+    best = None
+    for t in names:
+        if t != base and not t.startswith(base + "_"):
+            continue                       # 只认同分子/同位素，避免跨物种误用
+        cov = _coverage(t)
+        if not cov or cov[0] > numin or cov[1] < numax:
+            continue
+        if best is None or cov[2] < best[1][2]:
+            best = (t, cov)
+    return best
+
+
 def fetch_table(formula, M, I, numin, numax, force=False):
     """保证拿到真正覆盖 [numin, numax] 的线表；返回 (table, coverage)。
 
@@ -175,6 +226,9 @@ def fetch_table(formula, M, I, numin, numax, force=False):
         cov = _coverage(base)
         if cov and cov[0] <= numin and cov[1] >= numax:
             return base, cov
+        best = _loaded_covering(base, numin, numax)   # 复用已加载的更宽表，免重复下载
+        if best is not None:
+            return best
     last = None
     for attempt in range(_FETCH_TRIES):
         try:
@@ -234,6 +288,9 @@ def _absorption_uncached(name, numin, numax, T=296.0, P=1.01325, step=5e-4, wing
     _ensure_db()
     h = _hapi()
     formula, M = resolve(name)
+    # 抓取窗 = 计算窗 ± fetch_margin。只扩**线表**，输出网格仍是 (numin, numax)。
+    _dW = fetch_margin(wingHW, P)
+    gmin, gmax = float(numin) - _dW, float(numax) + _dW
     if iso == "all":
         _idx = _species_index()[formula]
         iso_list = _idx["isotopologues"]                       # 按丰度降序
@@ -241,7 +298,7 @@ def _absorption_uncached(name, numin, numax, T=296.0, P=1.01325, step=5e-4, wing
         tables, comps, skipped = [], [], []
         for e in iso_list:
             try:
-                tbl, _cov = fetch_table(formula, M, e["I"], numin, numax)
+                tbl, _cov = fetch_table(formula, M, e["I"], gmin, gmax)
             except RuntimeError as ex:
                 # all 模式下：主同位素失败 = 真故障（网络/服务端），必须硬报错；
                 # 非主（稀有）同位素某窗口无谱线属正常（HITRAN 对空窗口返回 404），
@@ -276,6 +333,8 @@ def _absorption_uncached(name, numin, numax, T=296.0, P=1.01325, step=5e-4, wing
                 "n_iso": len(comps), "iso_skipped": skipped,
                 "tables": tables,
                 "coverage_cm-1": [round(float(numin), 3), round(float(numax), 3)],
+                # 抓取窗（线表实际请求范围）与计算窗区别：前者含窗外翼线，后者是输出网格。
+                "fetch_window_cm-1": [round(gmin, 3), round(gmax, 3)],
                 "n_lines_table": n_lines_table, "n_lines_in_window": n_in,
                 "alpha_context": {"T_K": float(T), "P_atm": float(P),
                                   "window_cm-1": [float(numin), float(numax)],
@@ -283,7 +342,7 @@ def _absorption_uncached(name, numin, numax, T=296.0, P=1.01325, step=5e-4, wing
                                   "diluent": "air"}}
         return np.asarray(nu, dtype=float), np.asarray(coef, dtype=float), info
     I = _species_index()[formula]["main_iso"] if iso is None else int(iso)
-    table, cov = fetch_table(formula, M, I, numin, numax)
+    table, cov = fetch_table(formula, M, I, gmin, gmax)
     nu, coef = h.absorptionCoefficient_Voigt(
         Components=[(M, I, 1.0)],
         SourceTables=[table],
@@ -296,6 +355,8 @@ def _absorption_uncached(name, numin, numax, T=296.0, P=1.01325, step=5e-4, wing
     n_in = int(((nu_all >= numin) & (nu_all <= numax)).sum())
     info = {"molecule": formula, "M": M, "iso": I, "table": table,
             "coverage_cm-1": [round(cov[0], 3), round(cov[1], 3)],
+            # 抓取窗（线表实际请求范围）与计算窗区别：前者含窗外翼线，后者是输出网格。
+            "fetch_window_cm-1": [round(gmin, 3), round(gmax, 3)],
             "n_lines_table": cov[2], "n_lines_in_window": n_in,
             # α(ν) 的计算语境：α 峰值随 T/P/网格步长/翼截断/窗口 变化，
             # 报告 α 峰值时须能同时给出这五项，否则数值不可复现、不可比较。
@@ -424,5 +485,16 @@ def absorption_mixture(gases, numin, numax, T=296.0, P=1.01325, step=5e-4, wingH
         alpha_interp = np.interp(wn_grid, nu_i, alpha_i)
         alpha_per[name] = alpha_interp
         alpha_total += x * alpha_interp
+
+    # 边界披露：α_pure 一律按 air 浴计算（Diluent={"air":1.0}），
+    # 高浓度组分（≥1%）的同种分子碰撞展宽（self-broadening）未计入 ——
+    # 对呼气/烟道等痕量场景（x≲1%）可忽略，对纯气标定不可忽略。
+    for name, x in gases:
+        if float(x) >= 0.01:
+            warnings.warn(
+                f"[spectrolink] {name} 摩尔分数 {float(x):.1%} ≥ 1%：该组分按 air 浴"
+                f"展宽系数计算，未计 self-broadening 与同组分碰撞展宽，峰高/峰宽可能偏差。"
+                f"适用边界为痕量场景 x≲1%；高浓度定量请用配气标定或显式提供 Diluent 比。",
+                stacklevel=2)
 
     return wn_grid, alpha_total, alpha_per

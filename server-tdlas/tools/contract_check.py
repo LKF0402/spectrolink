@@ -933,5 +933,38 @@ try:
 except Exception as e:  # noqa: BLE001
     check("lock-in 可配置可离线实测", False, f"-> {type(e).__name__}: {e}")
 
+# ── core 抓取窗契约（离线、纯函数 + AST）────────────────────────────────
+# 守的是"窗外线的翼被静默丢弃"：HAPI 的选线循环遍历表内每一条线、不按输出窗口
+# 过滤（hapi.py:53672），故线表必须比计算窗宽出 ΩWingHW·Γ；否则窗缘 α 静默偏低
+# （实测 CH4 2967.6–2969.2 cm-1 窗左缘 −2.74%、全网格最大 −2.74%，而峰值仅 −0.001%，
+# 因此"看峰值对不对"的自检**抓不到**这个问题，必须专门守）。
+try:
+    import ast as _ast
+    from pathlib import Path as _Path
+    import spectrolink_core.hitran as _H
+
+    _m5, _m20, _m50 = (_H.fetch_margin(w) for w in (5.0, 20.0, 50.0))
+    check("fetch_margin 随 wingHW 单调不减", _m5 <= _m20 <= _m50,
+          f"-> 5:{_m5:.3f} 20:{_m20:.3f} 50:{_m50:.3f}")
+    check("fetch_margin 有 1.5 cm-1 下限（默认档已达实测饱和点）", _m5 >= 1.5,
+          f"-> {_m5:.3f}")
+    check("fetch_margin 随压力线性加宽（Γ ∝ P）",
+          abs(_H.fetch_margin(20.0, 5.0) - 5.0 * _H.fetch_margin(20.0, 1.0)) < 1e-9,
+          f"-> P=1:{_H.fetch_margin(20.0, 1.0):.3f} P=5:{_H.fetch_margin(20.0, 5.0):.3f}")
+
+    _tree = _ast.parse(_Path(_H.__file__).read_text(encoding="utf-8"))
+    _fn = next(n for n in _ast.walk(_tree)
+               if isinstance(n, _ast.FunctionDef) and n.name == "_absorption_uncached")
+    _wins = []
+    for _node in _ast.walk(_fn):
+        if isinstance(_node, _ast.Call) and getattr(_node.func, "id", "") == "fetch_table":
+            # fetch_table(formula, M, I, numin, numax) → 第 4/5 位是抓取窗
+            _wins.append([getattr(a, "id", None) for a in _node.args][3:5])
+    check("core 的 fetch_table 一律传扩窗变量（不是计算窗）",
+          bool(_wins) and all(w == ["gmin", "gmax"] for w in _wins),
+          f"-> {_wins}")
+except Exception as e:  # noqa: BLE001
+    check("core 抓取窗契约", False, f"-> {type(e).__name__}: {e}")
+
 print(f"\n===== 契约自检：{_OK} 通过 / {_BAD} 失败" + (f" / {_SKIPPED} 跳过（环境不支持）" if _SKIPPED else "") + " =====")
 raise SystemExit(1 if _BAD else 0)
