@@ -1,7 +1,7 @@
 # SpectroLink · server-lites 技术文档
 
 > 面向专业技术员：说明本 server 的**物理模型、逐级传递链、关键算法、默认参数、已知近似与实现陷阱**。
-> 本 server 是 SpectroLink monorepo（https://github.com/LKF0402/tdlas-mcp，GPLv3）的子服务器，
+> 本 server 是 SpectroLink monorepo（https://github.com/LKF0402/spectrolink，GPLv3）的子服务器，
 > 物理内核复用 `spectrolink_core`；配套文档：`README.md`（功能与快速开始）、`SKILL.md`（AI 使用规范）、`CHANGELOG.md`（变更记录）。
 
 ## 目录

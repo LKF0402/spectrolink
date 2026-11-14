@@ -1,6 +1,6 @@
 # server-lites — LITES 光谱仿真 MCP 服务器
 
-> **SpectroLink 子服务器**（monorepo `tdlas-mcp`，物理内核复用 `spectrolink_core`）。
+> **SpectroLink 子服务器**（monorepo `spectrolink`，物理内核复用 `spectrolink_core`）。
 > 独立加载、按需启用；完整项目说明见仓库根 [README.md](../README.md) 与 [SKILL.md](../SKILL.md)。
 
 **LITES（Light-Induced Thermoelastic Spectroscopy，光致热弹光谱）** 器件级仿真：对从光束到锁相输出的完整仪器链路逐级建模。
@@ -54,7 +54,7 @@ python tools/_rpc_test.py               # 端到端 JSON-RPC 回归（13 正向 
 
 ## 引用
 
-SpectroLink（formerly tdlas-mcp，https://github.com/LKF0402/tdlas-mcp，GPLv3）的 LITES 子服务器。
+SpectroLink（https://github.com/LKF0402/spectrolink，GPLv3；formerly tdlas-mcp）的 LITES 子服务器。
 底层数据：HAPI (Kochanov et al., JQSRT 2016, 10.1016/j.jqsrt.2016.03.005) · HITRAN2024 (Gordon et al., JQSRT 2026, 10.1016/j.jqsrt.2026.109807)。
 
 > ⚠️ 输出为**理论仿真**，仅用于研究参考、方法验证与系统选型，严禁冒充实验数据。

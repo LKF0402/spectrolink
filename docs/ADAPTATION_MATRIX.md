@@ -49,7 +49,7 @@ SpectroLink (monorepo)
 
 | server | 物理自检 | MCP 协议冒烟 | 端口 |
 |---|---|---|---|
-| server-tdlas | ✅ 契约自检 147 项 + 保真度审计 | ✅ | 8000 |
+| server-tdlas | ✅ 契约自检 189 项 + 保真度审计 | ✅ | 8000 |
 | server-lites | ✅ 17 项模块自检 | ✅ | 8001(lites) |
 | server-ndir | ✅ 5 锚点（forward/calibrate/invert 自洽） | ✅ initialize/list/call/-32601 | 8005 |
 | server-crds | ✅ 5 锚点（τ₀=3.335µs@R=0.999/1m、拟合 R²=0.99997） | ✅ | 8002 |

@@ -16,5 +16,5 @@
 - NaN 泄漏修复（非法 JSON）+ RPC NaN 守卫
 - 保真度台账缺口补齐；文档同步
 
-## [上游] tdlas-mcp 的历史演进
-上游演进见主仓库 CHANGELOG。
+## [上游] tdlas-mcp 时期的历史演进
+上游演进见主仓库 [CHANGELOG](../CHANGELOG.md)。

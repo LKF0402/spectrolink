@@ -202,7 +202,7 @@ description: SpectroLink 子服务器 server-lites（L2 参考，AI 自动读取
 ## 部署方式
 
 - **stdio（默认）**：本地 MCP 客户端直连
-- **HTTP 远程**：`--http --host 0.0.0.0 --port 8000 --token <密钥>`，端点 `/mcp`
+- **HTTP 远程**：`--http --host 0.0.0.0 --port 8001 --token <密钥>`，端点 `/mcp`
 - **公网隧道**：`python tools/remote_link.py`（cloudflared，仅监听 127.0.0.1 + 强制 Bearer token）
 
 ## 改动本 server 时的硬规则

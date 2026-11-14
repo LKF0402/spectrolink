@@ -3,6 +3,14 @@
 本文件以最简形式记录功能演进（不做过程细节罗列）。
 
 ## [Unreleased]
+### 第二十轮：全仓口径整改 + 一键接入可跑通
+- 新增 `spectrolink_core/pyproject.toml`：此前 `pip install -e ./spectrolink_core` 直接报 "not a Python project"，README / CI / 一键 prompt 全部卡在这一步
+- README 新增零占位一键接入 prompt（AI 自己 clone / 装依赖 / 写 MCP 配置 / 装 Skill / 自检），快速上手补 `git clone`
+- 旧仓库名清零：README（CI badge、引用）、USAGE（标题、链接）、server-lites（README / TECHNICAL / CHANGELOG / docs/VALIDATION）
+- USAGE 标题改为 SpectroLink，补 LITES / NDIR / CRDS / FTIR / DOAS 的问法
+- `server-lites/SKILL.md` HTTP 端口 8000 → 8001（与端口表一致）
+- 契约项数口径统一为 189（README、ADAPTATION_MATRIX）
+
 ### 第十九轮：吸收谱抓取窗自动外扩（修窗口边缘静默偏低）
 - 线表抓取窗改为「计算窗 ± ΩWingHW·Γ(P)」，输出网格与 `WavenumberRange` 不变（CH₄ 窗左缘 −2.74% → 0.00%，峰值不受影响）
 - 复用已加载的更宽线表，窗口微调不再重复下载整张表
