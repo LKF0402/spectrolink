@@ -2398,7 +2398,11 @@ def t_das_instrument(species="CH4", wn_center=2968.5, T=None, P=None, x=None, L_
 
     laser_info = None
     if auto_laser:
-        _note, laser_info = _maybe_align_laser(wn_center, inst, set(kw), bool(dev_params))
+        # 只有**显式**引用设备（setup/laser/pd/daq/optics）才抑制重锚；
+        # 默认设备不算 —— 否则 auto_laser 会被默认设备永久压住（实测踩到）。
+        _note, laser_info = _maybe_align_laser(
+            wn_center, inst, set(kw),
+            bool(setup or laser or pd or daq or optics))
     else:
         _note = None
     ignored = sorted(k for k in kw if k not in _INSTR_KEYS)
@@ -2596,7 +2600,11 @@ def t_wms_instrument(species="CH4", wn_center=2968.5, T=None, P=None, x=None, L_
     # 目标波数越界时自动重锚 wn_ref（理想激光器假设；已显式给激光参数/引用设备时不介入）
     laser_info = None
     if auto_laser:
-        _note, laser_info = _maybe_align_laser(wn_center, inst, set(kw), bool(dev_params))
+        # 只有**显式**引用设备（setup/laser/pd/daq/optics）才抑制重锚；
+        # 默认设备不算 —— 否则 auto_laser 会被默认设备永久压住（实测踩到）。
+        _note, laser_info = _maybe_align_laser(
+            wn_center, inst, set(kw),
+            bool(setup or laser or pd or daq or optics))
     else:
         _note = None
     ignored = sorted(k for k in kw if k not in _INSTR_KEYS_WMS)
