@@ -7,6 +7,7 @@
 - 宽 `except Exception` 收窄到真实可达异常类型（tdlas_mcp 15 → 2、tdlas_sim 6 → 0、core/hitran 5 → 1）；只保留两处真兜底：JSON-RPC 分发边界、可选依赖 `tdlas_fidelity` 加载
 - 新增 `spectrolink_core/tunnel.py`：cloudflared 隧道实现收敛为一份，六个 server 的 `tools/remote_link.py` 统一为薄封装（此前仅 tdlas/lites 各有一份重复实现）
 - LITES 隧道默认端口 8000 → 8001（与端口表一致，避免与 tdlas 抢端口）；四个原本缺失 `remote_link.py` 的 server 补齐
+- 修 DOAS 缺 `--http` 分支：此前 `doas_mcp.py --http` 不监听端口、静默走 stdio，HTTP 部署实际不可用；现与其余 server 同参（`--host/--port/--token`）
 
 ### 第二十一轮：代码组织重构（收敛重复传输层 + 拆分 tdlas_mcp）
 - 新建 `spectrolink_core/http_transport.py`：MCP Streamable HTTP 传输层与路径脱敏收敛为一份，六个 server 原先各自复制一份 `_run_http`，现统一为薄封装；脱敏大小写口径统一为不敏感
