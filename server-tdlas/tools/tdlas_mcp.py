@@ -2890,7 +2890,7 @@ def t_wms_instrument(species="CH4", wn_center=2968.5, T=None, P=None, x=None, L_
 
 def t_baseline_simulate(species="CO", wn_center=2183.22, T=296.0, P=1.01325,
                         x=6e-6, L_cm=2500.0, scan_span_cm=2.0, mod_depth_cm=0.25,
-                        fs=100000.0, fm=1000.0, fscan_Hz=10.0, n_scan_periods=3,
+                        fs=100000.0, fm=1000.0, fscan_Hz=10.0, n_scan_periods=6,
                         baseline_das=None, baseline_wms=None, save_png=False):
     """实测基线 WMS 仿真：用 0 ppm（氮气/零气）实测原始信号当 I0，叠加理论吸收。
 
@@ -2964,15 +2964,22 @@ def t_baseline_simulate(species="CO", wn_center=2183.22, T=296.0, P=1.01325,
     v_adc = I0_mod_norm * tau_theory * tau_das
 
     # ---- 数字锁相：复用内核，与 t_wms_instrument 同一实现 ----
+    # 三角波扫描本身是低频斜坡，直接锁相会在 1f 上解出伪直流并污染 2f/1f；
+    # 先按一个扫描周期做滑动去趋势（等价于 DAS 链路里的基线处理），再解调。
+    _n_scan_pts = max(8, int(round(_fs / _fsc)))
+    from scipy.ndimage import uniform_filter1d as _uf1d
+    _v_trend = _uf1d(v_adc, size=_n_scan_pts, mode="nearest")
+    _v_ac = v_adc - _v_trend
+
     with _quiet():
-        S1f, _, _ = ts.wms_harmonic_lockin(v_adc, t, _fs, _fm, 1)
-        S2f, _, _ = ts.wms_harmonic_lockin(v_adc, t, _fs, _fm, 2)
+        S1f, _, _ = ts.wms_harmonic_lockin(_v_ac, t, _fs, _fm, 1)
+        S2f, _, _ = ts.wms_harmonic_lockin(_v_ac, t, _fs, _fm, 2)
 
     # 归一化只在 1f 有意义（≥5% 峰值）的区间成立：无基线/I0 无调制时 1f 接近零，
     # 逐点相除会在那些点上爆成天文数字（实测踩到 2f/1f≈233 的假峰）。
     _s1_ref = float(_np.nanmax(S1f)) if _np.isfinite(S1f).any() else 0.0
     with _np.errstate(divide="ignore", invalid="ignore"):
-        S2f1f = _np.where(S1f > max(0.05 * _s1_ref, 1e-12), S2f / S1f, _np.nan)
+        S2f1f = _np.where(S1f > max(0.2 * _s1_ref, 1e-12), S2f / S1f, _np.nan)
 
     _s2 = float(_np.nanmax(S2f)) if _np.isfinite(S2f).any() else float("nan")
     _s2n = float(_np.nanmax(S2f1f)) if _np.isfinite(S2f1f).any() else float("nan")
@@ -3014,30 +3021,52 @@ def t_baseline_simulate(species="CO", wn_center=2183.22, T=296.0, P=1.01325,
     }
     out["provenance"] = provenance_block(out, info.get("table"))
     out["note"] = ("实测基线只替换 I0；吸收项仍是 HITRAN 理论值，故本工具输出的是"
-                   "「你的真实光源/探测器 + 理论吸收」的合成结果，不是纯实验数据。")
+                   "「你的真实光源/探测器 + 理论吸收」的合成结果，不是纯实验数据。"
+                   "三角波在谷底/峰顶驻留，该段会被滑动去趋势抹平，图上可能呈平台——"
+                   "这是解调滤波的表现，不代表物理吸收。")
 
     if save_png:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as _plt
+        from matplotlib import font_manager as _fmgr
+        for _f in ["Microsoft YaHei", "SimHei"]:
+            try:
+                _fmgr.findfont(_f, fallback_to_default=False)
+                _plt.rcParams["font.family"] = _f
+                break
+            except Exception:                              # noqa: BLE001
+                pass
+        _plt.rcParams["axes.unicode_minus"] = False
         _fig, _ax = _plt.subplots(2, 2, figsize=(11, 7))
         _ax[0, 0].plot(t * 1e3, v_adc, lw=0.7, color="#0072B2")
         _ax[0, 0].set_title("原始信号：实测基线 × 理论吸收")
-        _ax[0, 1].plot(wn_scan, S1f, lw=0.8, color="#009E73")
+        # 三角波往返 → 同一波数对应两个时刻；只取第一个扫描周期的上升沿作图，
+        # 否则往返段叠画会把 2f 峰叠成方头尖刺（实测踩到）。
+        _n_cycle = max(8, int(round(_fs / _fsc)))
+        _rise = _np.zeros(n_samples, dtype=bool)
+        _rise[1:] = _np.diff(wn_scan) > 0
+        _skip = 2 * _n_cycle                      # 前两个周期含滤波器启动瞬态
+        _sel = _rise & (_np.arange(n_samples) >= _skip) & \
+            (_np.arange(n_samples) < min(_skip + _n_cycle, n_samples - _n_cycle))
+        if int(_sel.sum()) < 8:                      # 极端参数下退化：退回全段
+            _sel = _np.ones(n_samples, dtype=bool)
+        _wn_plot = wn_scan[_sel]
+        _ax[0, 1].plot(_wn_plot, S1f[_sel], lw=0.9, color="#009E73")
         _ax[0, 1].set_title("1f 谐波")
-        _ax[1, 0].plot(wn_scan, S2f, lw=0.8, color="#D55E00")
+        _ax[1, 0].plot(_wn_plot, S2f[_sel], lw=0.9, color="#D55E00")
         _ax[1, 0].set_title("2f 谐波")
-        _ax[1, 1].plot(wn_scan, S2f1f, lw=0.8, color="#CC79A7")
+        _ax[1, 1].plot(_wn_plot, S2f1f[_sel], lw=0.9, color="#CC79A7")
         _ax[1, 1].set_title("2f/1f 归一化（免标定量）")
         for _i, (_a, _xl, _yl) in enumerate((
                 (_ax[0, 0], "t (ms)", "PD 信号（归一）"),
-                (_ax[0, 1], "波数 (cm⁻¹)", "S1f"),
-                (_ax[1, 0], "波数 (cm⁻¹)", "S2f"),
-                (_ax[1, 1], "波数 (cm⁻¹)", "2f/1f"))):
+                (_ax[0, 1], "波数 (cm$^{-1}$)", "S1f"),
+                (_ax[1, 0], "波数 (cm$^{-1}$)", "S2f"),
+                (_ax[1, 1], "波数 (cm$^{-1}$)", "2f/1f"))):
             _a.set_xlabel(_xl)
             _a.set_ylabel(_yl)
             _a.grid(alpha=0.25)
-        _fig.suptitle(f"{str(species).upper()} {float(wn_center):.4f} cm⁻¹ 实测基线 WMS · 理论仿真")
+        _fig.suptitle(f"{str(species).upper()} {float(wn_center):.4f} cm$^{-1}$ 实测基线 WMS · 理论仿真")
         _fig.tight_layout()
         OUT_DIR.mkdir(parents=True, exist_ok=True)
         _fn = OUT_DIR / (f"baseline_{_safe_name(species)}_"
@@ -3995,7 +4024,8 @@ TOOLS = [
          "fs": {"type": "number", "description": "采样率 Hz，默认 1e5"},
          "fm": {"type": "number", "description": "调制频率 Hz，默认 1000"},
          "fscan_Hz": {"type": "number", "description": "三角波扫描频率 Hz，默认 10"},
-         "n_scan_periods": {"type": "integer", "description": "扫描周期数，默认 3"},
+         "n_scan_periods": {"type": "integer",
+                            "description": "扫描周期数，默认 6（首尾各一个周期会被滑动去趋势污染，中间段才用于作图）"},
          "baseline_das": {"type": "array",
                           "description": "氮气背景、**不加调制**的 DAS 原始信号：[[波数 cm^-1, 电压 V], ...]，≥8 点",
                           "items": {"type": "array", "items": {"type": "number"}}},
