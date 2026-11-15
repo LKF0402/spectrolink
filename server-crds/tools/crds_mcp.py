@@ -37,9 +37,7 @@ SERVER_INFO = {"protocolVersion": PROTOCOL_VERSION,
 _HOME = str(Path.home())
 _WS_ROOT = str(_ROOT.parent)
 
-from spectrolink_core.http_transport import (          # noqa: E402
-    make_path_sanitizer, run_mcp_http)
-
+from spectrolink_core.sanitize import make_path_sanitizer    # noqa: E402
 
 
 _sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
@@ -324,14 +322,6 @@ def handle_request(req):
             "error": {"code": -32601, "message": f"未知方法：{method}"}}
 
 
-def _arg(name, default=""):
-    if name in sys.argv:
-        i = sys.argv.index(name)
-        if i + 1 < len(sys.argv):
-            return sys.argv[i + 1]
-    return default
-
-
 def main():
     for _s in (sys.stdin, sys.stdout, sys.stderr):
         try:
@@ -345,14 +335,6 @@ def main():
             sys.stderr.write(f"[crds-mcp] 自检无法运行：{exc}\n")
             raise SystemExit(2)
         return
-    if "--http" in sys.argv:
-        host = _arg("--host", "127.0.0.1")
-        port = int(_arg("--port", "8002"))
-        token = _arg("--token", "")
-        if host in ("0.0.0.0", "") and not token:
-            sys.stderr.write("[警告] 监听 0.0.0.0 且未设置 --token：远程暴露请务必加 --token。\n")
-        _run_http(host, port, token)
-        return
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -364,12 +346,6 @@ def main():
                     "error": {"code": -32700, "message": "JSON 解析失败"}}
         if resp is not None:
             print(json.dumps(resp, ensure_ascii=False), flush=True)
-
-
-def _run_http(host, port, token):
-    """MCP Streamable HTTP：把同一套 handle_request 暴露为 URL（实现见 spectrolink_core）。"""
-    run_mcp_http(handle_request, host, port, token,
-                 sanitize=_sanitize_paths, server_name="crds-mcp")
 
 
 if __name__ == "__main__":

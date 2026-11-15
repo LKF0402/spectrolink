@@ -93,8 +93,7 @@ from tdlas_constants import (          # noqa: E402 纯数据常量表
     _X_LIST_MAX,
 )
 
-from spectrolink_core.http_transport import (          # noqa: E402
-    make_path_sanitizer, run_mcp_http)
+from spectrolink_core.sanitize import make_path_sanitizer    # noqa: E402
 
 # 递归脱敏：把 <workspace> / <home> 绝对路径替换成中性标记（实现见 spectrolink_core）
 _sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
@@ -595,29 +594,11 @@ def _interaction_block(out, tool, session_id="default"):
 # fs→采样率、throughput→光通量。在"保存"这个最早入口拦下，远比等仿真出 nan 再回溯根因便宜。
 
 
-
-
-
-
-
-
-
-
 #: 各类设备的**显著标识键**：设备名至少要命中一个，否则不可能被区分。
 #: 为什么要校验：设备名是用户以后**只能看到的东西**（引用时只传名字）。
 #: 叫 "A套"/"测试"/"dev1" 的条目一旦积累，用户无法判断哪个能用、
 #: 哪个是上周调过的。这是对用户不友好，也让 AI 无法选对设备。
 #: 无意义的名字（单字符、纯编号、通用词）——直接拒绝
-
-
-
-
-
-
-
-
-
-
 
 
 def _resolve_conditions(T, P, x, L_cm, session_id="default", x_default=1e-3, L_default=50.0):
@@ -1208,7 +1189,6 @@ def t_detection_limit(species="H2O", wn0=7185.596, T=None, P=None, L=None,
             "needs_confirm": bool(assumed), "log": _sanitize_paths(g.getvalue()).splitlines()}
 
 
-
 def t_calibration_curve(species="CH4", wn0=2968.5, T=296.0, P=1.01325,
                         L=10.0, x_list=None, save_png=False):
     """标定曲线：扫多个浓度，看 2f 峰高与浓度的线性关系。
@@ -1570,7 +1550,6 @@ def apply_contract_blocks(out, tool, session_id="default", extra=None):
         out["clarify"] = extra["clarify"]
         written.append("clarify")
     return written
-
 
 
 # etalon 条纹相关键：默认不参与"缺省参数确认"（默认关 → 不该反复追问）；
@@ -2725,8 +2704,6 @@ def t_guide(topic=None):
     return out
 
 
-
-
 def t_export(data, filename, format="csv"):
     """导出仿真结果到文件（CSV 或 JSON）。
 
@@ -3491,21 +3468,6 @@ def handle_request(req):
             "error": {"code": -32601, "message": f"未知方法：{method}"}}
 
 
-def _arg(name, default=""):
-    """读取 `--name value` 形式的命令行参数。"""
-    if name in sys.argv:
-        i = sys.argv.index(name)
-        if i + 1 < len(sys.argv):
-            return sys.argv[i + 1]
-    return default
-
-
-def _run_http(host, port, token):
-    """MCP Streamable HTTP：把同一套 handle_request 暴露为 URL（实现见 spectrolink_core）。"""
-    run_mcp_http(handle_request, host, port, token,
-                 sanitize=_sanitize_paths, server_name="tdlas-mcp")
-
-
 def main():
     # Windows 控制台默认 GBK：协议流必须强制 UTF-8，否则中文会破坏 JSON-RPC
     for _s in (sys.stdin, sys.stdout, sys.stderr):
@@ -3519,15 +3481,6 @@ def main():
         except ImportError as exc:      # 依赖缺失：给可操作的提示 + 非零退出码（便于 CI 判断）
             sys.stderr.write(f"[tdlas-mcp] 自检无法运行：{exc}\n")
             raise SystemExit(2)
-        return
-    if "--http" in sys.argv:
-        host = _arg("--host", "127.0.0.1")
-        port = int(_arg("--port", "8000"))
-        token = _arg("--token", "")
-        if host in ("0.0.0.0", "") and not token:
-            sys.stderr.write("[警告] 监听 0.0.0.0 且未设置 --token：任何能访问该端口的客户端都可调用仿真，"
-                             "远程暴露请务必加 --token。\n")
-        _run_http(host, port, token)
         return
     for line in sys.stdin:                            # stdio 协议循环
         line = line.strip()

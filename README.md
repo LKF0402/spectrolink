@@ -6,7 +6,7 @@
 TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS — 自然语言驱动 · 无需 API key</p>
 
 <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB" alt="Python">
-<img src="https://img.shields.io/badge/MCP-stdio%20%7C%20HTTP-6B8FD4" alt="MCP">
+<img src="https://img.shields.io/badge/MCP-stdio-6B8FD4" alt="MCP">
 <img src="https://img.shields.io/badge/HITRAN-HAPI%201.x-4C8C4A" alt="HITRAN">
 <img src="https://github.com/LKF0402/spectrolink/actions/workflows/ci.yml/badge.svg" alt="CI">
 <img src="https://img.shields.io/badge/release-v0.2.0-blue" alt="Release">
@@ -173,14 +173,14 @@ python server-doas/tools/doas_mcp.py --selftest     # DOAS 服务器自检（离
 | **DOAS** | t_doas_forward | UV-Vis 截面正演（慢变背景多项式分离 + 联合最小二乘） |
 | | t_doas_calibrate / t_doas_invert | 标定曲线 / 实测谱反演 |
 
-## 🌐 远程部署
+## 运行形态：仅本地
+
+本项目**只做本地 MCP**（stdio 传输）：客户端拉起 `python server-<技术>/tools/<技术>_mcp.py`，
+用 stdin/stdout 收发 JSON-RPC。不提供 HTTP 端口、公网隧道或 Bearer 鉴权——
+那套远程草稿作用有限、维护成本高，已整体移除（见 CHANGELOG 第二十三轮）。
 
 ```bash
-python server-tdlas/tools/tdlas_mcp.py --http --host 0.0.0.0 --port 8000 --token <鉴权密钥>
-python server-tdlas/tools/remote_link.py   # 公网隧道（cloudflared）
-# 其余技术：lites=8001 / crds=8002 / ftir=8003 / doas=8004 / ndir=8005
-# 六个 server 都有 tools/remote_link.py（同一份实现 spectrolink_core/tunnel.py），
-# 端口/密钥用 <TECH>_PORT / <TECH>_TOKEN 覆盖
+python server-tdlas/tools/tdlas_mcp.py --selftest   # 本地跑一遍自检
 ```
 
 ## 📚 文档

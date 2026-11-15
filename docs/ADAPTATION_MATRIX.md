@@ -47,14 +47,14 @@ SpectroLink (monorepo)
 
 ## 已实现 server 的验证状态（2026-11-14 复核）
 
-| server | 物理自检 | MCP 协议冒烟 | 端口 |
+| server | 物理自检 | MCP 协议冒烟 | 传输 |
 |---|---|---|---|
-| server-tdlas | ✅ 契约自检 191 项 + 保真度审计 | ✅ | 8000 |
-| server-lites | ✅ 17 项模块自检 | ✅ | 8001 |
-| server-ndir | ✅ 5 锚点（forward/calibrate/invert 自洽） | ✅ initialize/list/call/-32601 | 8005 |
-| server-crds | ✅ 5 锚点（τ₀=3.335µs@R=0.999/1m、拟合 R²=0.99997） | ✅ | 8002 |
-| server-ftir | ✅ 5 锚点（往返误差 0.2%、分辨率缩放 1.75、窗旁瓣 boxcar -13.5/hamming -52.5/BH -93 dB、反演误差 0.05%） | ✅ | 8003 |
-| server-doas | ✅ 5 锚点（无噪反演精确、多项式稳健、噪声统计判据、标定 slope=1.0/R²=1.0） | ✅ | 8004 |
+| server-tdlas | ✅ 契约自检 191 项 + 保真度审计 | ✅ | stdio |
+| server-lites | ✅ 17 项模块自检 | ✅ | stdio |
+| server-ndir | ✅ 5 锚点（forward/calibrate/invert 自洽） | ✅ initialize/list/call/-32601 | stdio |
+| server-crds | ✅ 5 锚点（τ₀=3.335µs@R=0.999/1m、拟合 R²=0.99997） | ✅ | stdio |
+| server-ftir | ✅ 5 锚点（往返误差 0.2%、分辨率缩放 1.75、窗旁瓣 boxcar -13.5/hamming -52.5/BH -93 dB、反演误差 0.05%） | ✅ | stdio |
+| server-doas | ✅ 5 锚点（无噪反演精确、多项式稳健、噪声统计判据、标定 slope=1.0/R²=1.0） | ✅ | stdio |
 
 ## 接入新技术的流程
 

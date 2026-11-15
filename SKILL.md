@@ -55,18 +55,12 @@ description: SpectroLink —— 多技术光谱传感仿真 MCP 总入口。触�
 - 多气体混合：`spectrolink_core.hitran.absorption_mixture()` 自动插值到统一波数网格。
 - 横轴口径：TDLAS/CRDS/FTIR 用**波数 cm⁻¹**；DOAS 用**波长 nm**（勿混）。
 
-## 5. 部署（stdio 默认；HTTP 端口表）
+## 5. 部署（仅本地 stdio）
 
-| server | 端口 |
-|---|---|
-| tdlas | 8000 |
-| lites | 8001 |
-| ndir | 8005 |
-| crds | 8002 |
-| ftir | 8003 |
-| doas | 8004 |
+六个 server 都用 stdio：客户端配置 `command = 本机 python`、`args = [server-<技术>/tools/<技术>_mcp.py]` 即可。
+**不提供 HTTP 端口 / 公网隧道 / Bearer 鉴权**——远程形态已整体移除（见 CHANGELOG 第二十三轮）。
 
-远程 HTTP 均强制 Bearer token；公网隧道用各 server `tools/remote_link.py`。
+自检：`python server-tdlas/tools/tdlas_mcp.py --selftest`（其余技术同名 `--selftest`）。
 
 ## 6. 子 SKILL 索引
 

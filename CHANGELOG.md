@@ -3,14 +3,21 @@
 本文件以最简形式记录功能演进（不做过程细节罗列）。
 
 ## [Unreleased]
-### 第二十二轮：异常捕获收窄 + 隧道脚本收敛
+### 第二十三轮：撤除全部远程能力，项目只做本地 stdio
+- 用户结论：远程那套（HTTP 入口 + cloudflared 隧道 + Bearer 鉴权）留着不好用，且项目定位就是本地给 AI 客户端直接调，故整体移除
+- 删除 `spectrolink_core/http_transport.py`、`spectrolink_core/tunnel.py`、六个 server 的 `tools/remote_link.py`
+- 六个 server 移除 `--http` 分支与 `_arg`/`_run_http` 辅助，入口回到「`--selftest` 或 stdio 循环」两种；`run_mcp_http` 不再被引用
+- 路径脱敏未受累：`make_path_sanitizer` 迁到 `spectrolink_core/sanitize.py`（六个 server 返回值仍需脱敏），不依赖任何网络代码
+- 文档口径同步：README「远程部署」→「仅本地」、SKILL §5 端口表 → stdio 说明、TECHNICAL、server-lites SKILL、`mcp.config.example.json` 删除 http 条目
+
+### 第二十二轮：异常捕获收窄 + 隧道脚本收敛（隧道部分已被第二十三轮移除）
 - 宽 `except Exception` 收窄到真实可达异常类型（tdlas_mcp 15 → 2、tdlas_sim 6 → 0、core/hitran 5 → 1）；只保留两处真兜底：JSON-RPC 分发边界、可选依赖 `tdlas_fidelity` 加载
-- 新增 `spectrolink_core/tunnel.py`：cloudflared 隧道实现收敛为一份，六个 server 的 `tools/remote_link.py` 统一为薄封装（此前仅 tdlas/lites 各有一份重复实现）
-- LITES 隧道默认端口 8000 → 8001（与端口表一致，避免与 tdlas 抢端口）；四个原本缺失 `remote_link.py` 的 server 补齐
-- 修 DOAS 缺 `--http` 分支：此前 `doas_mcp.py --http` 不监听端口、静默走 stdio，HTTP 部署实际不可用；现与其余 server 同参（`--host/--port/--token`）
+- ~~新增 `spectrolink_core/tunnel.py`：cloudflared 隧道实现收敛为一份，六个 server 的 `tools/remote_link.py` 统一为薄封装~~（第二十三轮已删除）
+- ~~LITES 隧道默认端口 8000 → 8001；四个原本缺失 `remote_link.py` 的 server 补齐~~（第二十三轮已删除）
+- 修 DOAS 缺 `--http` 分支：此前 `doas_mcp.py --http` 不监听端口、静默走 stdio，HTTP 部署实际不可用（第二十三轮随远程形态一并移除）
 
 ### 第二十一轮：代码组织重构（收敛重复传输层 + 拆分 tdlas_mcp）
-- 新建 `spectrolink_core/http_transport.py`：MCP Streamable HTTP 传输层与路径脱敏收敛为一份，六个 server 原先各自复制一份 `_run_http`，现统一为薄封装；脱敏大小写口径统一为不敏感
+- ~~新建 `spectrolink_core/http_transport.py`：MCP Streamable HTTP 传输层与路径脱敏收敛为一份~~（HTTP 部分第二十三轮已删除，脱敏迁至 `sanitize.py`）
 - `tdlas_mcp.py` 拆出 `tdlas_constants.py`（25 个纯数据常量，零逻辑零包内依赖）与 `tdlas_state.py`（会话/设备库读写）：主文件 4193 → 3547 行，只保留协议与工具层
 - 契约隔离修正：状态文件路径归状态层后，测试隔离必须同时打到 `tdlas_state`，否则会读用户真实设备库、在本地出现假失败；现恢复 191 通过 / 0 失败 / 0 跳过
 - 契约项数口径 189 → 191（README、VALIDATION、ADAPTATION_MATRIX）

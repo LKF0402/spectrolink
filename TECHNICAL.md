@@ -360,7 +360,7 @@ $$T(\tilde\nu)=\frac{1}{1+F\sin^2(\delta/2)},\qquad \delta=\frac{2\pi\tilde\nu}{
 
 > ⚠ **σ 必须在"要报告的那个浓度"上求**。噪声中相当一部分（热噪声、ADC 量化、RIN）**不随吸收信号等比缩放**，因此 `rel_sigma` 随 $x$ 明显变化：实测 CH4@2968.5、$L=50$ cm、$n=5$ 时 $x=10^{-3}\to1.08\%$、$10^{-5}\to0.21\%$、$10^{-7}\to4.04\%$（跨 4 个量级差约 20 倍）。早先按"与浓度无关"的说法在参考浓度 `x_ref` 处求 σ 再套到反演浓度 `x_est` 上，浓度差得远时误差可达一个量级；现在改为在 `x_est` 处求（`x_est` 越界时退回 `x_ref` 并在 `x_eval_source` 里标注"本次结果本身不可用"）。
 
-**缓存**：`measurement_uncertainty` / `detection_limit` 会对**完全相同**的 (species, 窗口, T, P, step, wingHW) 反复调用 `tdlas_hitran.absorption()`，而单次 Voigt 计算实测 0.6–0.9 s。故 `absorption()` 加进程内缓存：键含全部影响 α 的参数；命中返回**副本**（数组与 `info` 都是，防调用方就地修改污染缓存）；FIFO 上限 64，可用 `alpha_cache_clear()` 清空；改字典时加锁（HTTP 模式是 `ThreadingHTTPServer`，淘汰那一步在并发下会竞态，0.6 s 的计算仍在锁外）。$\alpha(\nu)$ 是参数的纯函数，**缓存不改变任何数值**，仅改变耗时。
+**缓存**：`measurement_uncertainty` / `detection_limit` 会对**完全相同**的 (species, 窗口, T, P, step, wingHW) 反复调用 `tdlas_hitran.absorption()`，而单次 Voigt 计算实测 0.6–0.9 s。故 `absorption()` 加进程内缓存：键含全部影响 α 的参数；命中返回**副本**（数组与 `info` 都是，防调用方就地修改污染缓存）；FIFO 上限 64，可用 `alpha_cache_clear()` 清空；淘汰在锁内、0.6 s 的数值计算在锁外（stdio 单线程下无额外开销）。$\alpha(\nu)$ 是参数的纯函数，**缓存不改变任何数值**，仅改变耗时。
 
 **驱动可行性校验的对象**（易错点）：`_scan_window_reason(off, amp, v_lo_eff, v_hi)` 是"整段扫描是否都在有效输出区"的唯一判据，`laser_reach()` 与引擎的 `_require_driver_range()` 共用它。但引擎侧**必须用 `cfg` 里实际生效的 `offset_V ± amp_V`** 去判定：`_resolve_scan()` 只在"用户没显式给 `offset_V`"时才由 `wn_center` 反算偏置，用户一旦显式给出，**扫描中心就由 `offset_V` 决定、`wn_center` 只是标签**。若拿 `laser_reach(wn_center)` 的结果顶替，会同时错两个方向——显式合法 `offset_V` 被误拒、显式越限 `offset_V`（如 9 V）被静默放行（坏结果只因下游"ADC 饱和"之类的警告才露出痕迹）。重锚 `wn_ref` 的建议也只在"偏置确实由 `wn_center` 反算"时才给出。
 
@@ -496,7 +496,7 @@ out["next_required_actions"] = [
 
 > 与 TDLAS/LITES 同构：每技术一个独立 server 目录 + 独立 MCP 入口（stdio JSON-RPC 2024-11-05），工具 `t_<tech>_*`；共用 `spectrolink_core`；**默认参数均为演示占位，不内置仪器**（真实器件参数经用户交互获取）。自检 `python server-<tech>/tools/<tech>_mcp.py --selftest`。
 
-> **HTTP 端口表**：tdlas=8000、lites=8001、ndir=8005、crds=8002、ftir=8003、doas=8004（ndir 曾与 lites 共用 8001，已调整为 8005 消除冲突）。远程均强制 Bearer token。
+> **运行形态**：六个 server 统一 stdio（本地 MCP 客户端直连），不提供 HTTP 端口 / 公网隧道 / Bearer 鉴权。远程形态已整体移除（CHANGELOG 第二十三轮）。
 
 > **Skill 渐进式披露（AI 调度层）**：根 `SKILL.md` 为唯一安装入口（L1），只含技术选择矩阵与自动调度协议；各技术细节（路由表 / 默认披露 / 专属坑点）在 `server-<技术>/SKILL.md`（L2），由 AI 按任务自动读取。披露深度分级：L1 浅（仅选型问答）→ L2 中（调工具 / 定量结果，需 Read 目标 L2）→ L3 深（出图 / 论文数值，展开参数表与 provenance）。用户只需安装根 SKILL 一个技能。
 

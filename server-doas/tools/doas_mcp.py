@@ -35,9 +35,7 @@ SERVER_INFO = {"protocolVersion": PROTOCOL_VERSION,
 _HOME = str(Path.home())
 _WS_ROOT = str(_ROOT.parent)
 
-from spectrolink_core.http_transport import (          # noqa: E402
-    make_path_sanitizer, run_mcp_http)
-
+from spectrolink_core.sanitize import make_path_sanitizer    # noqa: E402
 
 
 _sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
@@ -165,27 +163,10 @@ def handle_request(req):
             "error": {"code": -32601, "message": f"未知方法：{method}"}}
 
 
-def _arg(flag, default):
-    """取 `--flag value` 的值；缺失或没有后续参数时用默认值。"""
-    try:
-        return sys.argv[sys.argv.index(flag) + 1]
-    except (ValueError, IndexError):
-        return default
-
-
 def main():
     if "--selftest" in sys.argv:
         sys.stdout.write(json.dumps(_sanitize_paths(dph.selftest()), ensure_ascii=False) + "\n")
         return 0 if dph.selftest()["ok"] else 2
-    if "--http" in sys.argv:
-        host = _arg("--host", "127.0.0.1")
-        port = int(_arg("--port", "8004"))
-        token = _arg("--token", "")
-        if host in ("0.0.0.0", "") and not token:
-            sys.stderr.write("[警告] 监听 0.0.0.0 且未设置 --token：远程暴露请务必加 --token。\n")
-        run_mcp_http(handle_request, host, port, token,
-                     sanitize=_sanitize_paths, server_name="doas-mcp")
-        return 0
     for line in sys.stdin:
         line = line.strip()
         if not line:
