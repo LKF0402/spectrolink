@@ -44,7 +44,9 @@ FTIR 以**宽带干涉测量**获得全谱（Fellgett 优点——全波段同�
 
 ## 交互契约
 
-- `validation.overall`：`fail` 不得下结论；`warn`（默认演示占位）须披露。
+- 仪器/分析工具返回 `interaction` 与 `next_required_actions`；`conclusion_allowed=false`（缺输入数组、浓度越界）时不得给定量结论，`must_disclose` 项须在同一回答说明。`t_ftir_selftest` 不返回契约块。
+- `validation.overall`：`fail` 不得下结论；`warn`（默认演示占位）须披露；`checks[]` 含浓度域、反演误差与分辨率。
+- `t_ftir_invert` 不传数组时只返回 `usage`，**`x=None` 不是结果**，必须阻断结论。
 - `window` 非 boxcar 时披露分辨率损失；`line_source=hitran` 降级时披露。
 
 ## 使用声明

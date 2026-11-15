@@ -3,6 +3,17 @@
 本文件以最简形式记录功能演进（不做过程细节罗列）。
 
 ## [Unreleased]
+### 第二十五轮：CRDS / NDIR / FTIR / DOAS 接入交互契约 + 标定数值修复
+- 新建 `spectrolink_core/interaction_server.py`：把 `interaction_block` 统一接到四 server 的 `DISPATCH`，只做一次包装；会话态改为进程内存储，避免给只读安装目录增加写盘依赖，`*_selftest` 不参与记账
+- 新建 `spectrolink_core/validation.py`：`check` / `validation_block` 统一 `checks[]` 与 `overall` 归并；四 server 不再只有一句 `overall=warn`
+- CRDS / NDIR / FTIR / DOAS 的仪器/分析工具统一返回 `interaction` + `next_required_actions`，动作只依据真实字段（浓度定义域、`x_error_frac`、`ringdown_fit.r2`、`fit.r2`、`r_squared`、`max_abs_err_frac`、非 HITRAN 谱源、缺输入 `usage`）
+- NDIR 标定符号修复：`calibrate()` 的 `R²/R0_fit` 与 `A_fit` 符号不一致，默认 `r2=-13.0 / R0_fit=0.9951`；统一到 `y=-A·x` 后 `r2=1.0 / R0_fit=1.0`，selftest 增加 `r2/R0_fit` 守卫
+- NDIR 反演域校验：默认输入解出 `x=1.389>1` 时返回 `validation.overall=fail` 并阻断结论，不再把越界值当浓度
+- DOAS 标定误差口径修复：`max_abs_err_frac` 在 `x=0` 处除以 `1e-30` 产生 `2.3e10` 虚假巨值；改为按浓度满量程归一化，默认 `0.0`，selftest 增加守卫
+- FTIR / DOAS 无参数反演：`usage` 提示不再被当成“有结果”，`validation.overall=fail` + `input_required` 阻断结论
+- CRDS / FTIR 补强吸收动态范围守卫：τ 缩短 >98%、恢复谱 T≤2% 判 `fail`，50%/10% 判 `warn`，避免在不可定量区照常给浓度
+- 停掉遗留 `doas_mcp.py --http --port 8816` 进程；`hitran.py` 的 HTTP 并发注释改为本地多线程口径
+
 ### 第二十四轮：协议层收敛为单一实现 + 代码卫生
 - 新建 `spectrolink_core/mcp_runtime.py`：`schema_index` / `validate_args` / `make_handle_request` / `serve_stdio`，JSON-RPC 语义只此一份
 - 六个 server 的 `_validate_args` + `handle_request` + stdio 循环删除，改为 `make_handle_request(...)` 绑定 + `serve_stdio`；工具面、`DISPATCH`、`--selftest` 行为不变

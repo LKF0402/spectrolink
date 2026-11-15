@@ -48,7 +48,8 @@ CRDS 不测透射光强，而测**腔内光子寿命 τ**：
 
 ## 交互契约
 
-- `validation.overall`：`fail` 不得下结论；`warn`（默认，因演示占位参数）须在回答披露"默认参数为演示占位"。
+- 仪器/分析工具返回 `interaction` 与 `next_required_actions`：`conclusion_allowed=false` 时不得给定量结论；`must_disclose` 项须在同一回答说明。`t_crds_selftest` 不返回契约块。
+- `validation.overall`：`fail` 不得下结论；`warn`（默认，因演示占位参数）须在回答披露"默认参数为演示占位"。`checks[]` 给出逐项判据（浓度域、反演误差、ring-down R²、谱源）。
 - `line_source=hitran` 但降级为高斯时，`disclosure` 必须原样转述——**降级谱非真实谱，不得当实测谱**。
 
 ## 使用声明

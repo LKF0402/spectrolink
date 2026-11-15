@@ -93,11 +93,13 @@ def calibrate(x_list, L_s_cm: float = 10.0, L_r_cm: float = 10.0,
     denom = n * sxx - sx * sx
     # y = ln(R/R0) = -A·x，最小二乘斜率 a = -A → A_fit = -a
     a_fit = -(n * sxy - sx * sy) / denom if abs(denom) > 1e-30 else float("nan")
-    r0_fit = math.exp(sy / n - a_fit * (sx / n)) * i0_s / i0_r if i0_r else float("nan")
-    # R²（对 lnR 线性模型）
+    # y = ln(R/R0) = -A·x；拟合截距 b = mean(y) + A·mean(x)，R0_fit = exp(b)·i0_s/i0_r
+    r0_fit = (math.exp(sy / n + a_fit * (sx / n)) * i0_s / i0_r
+              if i0_r else float("nan"))
+    # R²（对 lnR 线性模型）：模型 y_hat = -A_fit·x（无截距）
     y_mean = sy / n
     ss_tot = sum((v - y_mean) ** 2 for v in ys)
-    ss_res = sum((ys[i] - (a_fit * xs[i])) ** 2 for i in range(n))
+    ss_res = sum((ys[i] + a_fit * xs[i]) ** 2 for i in range(n))
     r2 = 1.0 - ss_res / ss_tot if ss_tot > 1e-30 else 1.0
     return {
         "n": n,
@@ -137,6 +139,11 @@ def selftest():
     cal = calibrate(xs)
     if abs(cal["A_match"] - 1.0) > 1e-6:
         fails.append("标定拟合 A 与理论不一致")
+    # 4b) 无噪声标定的拟合质量：R²≈1、R0_fit≈1（符号/截距错误的守卫）
+    if abs(cal["fit"]["r2"] - 1.0) > 1e-6:
+        fails.append("标定拟合 R² 异常（应为 1）")
+    if abs(cal["fit"]["R0_fit"] - 1.0) > 1e-6:
+        fails.append("标定拟合 R0 异常（应为 1）")
     # 5) 噪声锚点（统计判据）：1% 噪声 + 1% 浓度，|反演绝对误差| < 3σ_x（σ_x≈noise/A）
     fn = forward(0.01, noise_frac=0.01, seed=1)
     sigma_x = fn["x_noise_1sigma"]

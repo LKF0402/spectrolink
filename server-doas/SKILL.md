@@ -46,8 +46,10 @@ DOAS 在**紫外-可见宽带域**分离"慢变背景"与"分子窄带吸收"：
 
 ## 交互契约
 
-- `validation.overall`：`fail` 不得下结论；`warn`（默认演示占位）须披露。
-- 标定结果 `A_fit`（=σ·L）作反演输入，勿手抄。
+- 仪器/分析工具返回 `interaction` 与 `next_required_actions`；`conclusion_allowed=false`（缺 I/I₀/σ、浓度越界）时不得给定量结论，`must_disclose` 项须在同一回答说明。`t_doas_selftest` 不返回契约块。
+- `validation.overall`：`fail` 不得下结论；`warn`（默认演示占位）须披露；`checks[]` 含浓度域、峰光学厚度、反演误差、标定 R²/斜率/归一化最大误差。
+- `t_doas_invert` 不传数组时只返回 `usage`，**`x=None` 不是结果**，必须阻断结论。
+- 标定输出 `slope`（反演浓度/真值）检验算法；`max_abs_err_frac` 已按浓度满量程归一化，勿再按单点相对误差解读。
 
 ## 使用声明
 

@@ -39,13 +39,14 @@ SpectroLink (monorepo)
 - Voigt / 线强温度外推 / 同位素叠加（`hitran.py`）
 - 数字锁相 / 谐波解调 / 相位旋转（`lockin.py`，TDLAS-WMS 与 LITES 共用）
 - Allan 方差 / LOD 基座（`stats.py`）
-- 器件库 schema 占位（`devices.py`，**只定义结构，不内置默认仪器**）
+- 交互动作证据解析 / 指纹 / 按需下发（`interaction.py`、`interaction_server.py`）
+- 轻量 `checks[]` 与 `overall` 归并（`validation.py`）
 
 **留在各 server（技术特有）**：
 - QTF 谐振 / 热弹机理 / 能量积累（LITES）
 - 双通道差分检测（NDIR）、腔衰荡拟合（CRDS）、干涉图处理（FTIR）、差分吸收反演（DOAS）等
 
-## 已实现 server 的验证状态（2026-11-14 复核）
+## 已实现 server 的验证状态（2026-11-15 复核）
 
 | server | 物理自检 | MCP 协议冒烟 | 传输 |
 |---|---|---|---|
@@ -55,6 +56,8 @@ SpectroLink (monorepo)
 | server-crds | ✅ 5 锚点（τ₀=3.335µs@R=0.999/1m、拟合 R²=0.99997） | ✅ | stdio |
 | server-ftir | ✅ 5 锚点（往返误差 0.2%、分辨率缩放 1.75、窗旁瓣 boxcar -13.5/hamming -52.5/BH -93 dB、反演误差 0.05%） | ✅ | stdio |
 | server-doas | ✅ 5 锚点（无噪反演精确、多项式稳健、噪声统计判据、标定 slope=1.0/R²=1.0） | ✅ | stdio |
+
+> 交互契约（`interaction` / `next_required_actions`）四个技术 server 均已接入；`validation` 统一为 `checks[]` + `overall`。具体动作 ID 以各 server `SKILL.md` 为准。
 
 ## 接入新技术的流程
 

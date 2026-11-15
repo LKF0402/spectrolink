@@ -18,7 +18,8 @@ core 只放**物理量级**的纯函数（无任何技术假设）；技术口�
 | `hitran` | HITRAN 线表获取 / 本地缓存 / 指纹、Voigt 谱形、线强外推、同位素叠加、离线降级；抓取窗自动外扩（`fetch_margin`） |
 | `lockin` | 数字锁相基座：`harmonic_demod_time`（多级低通 + 谐波解调）、`phase_rotate`（正交相位校正） |
 | `stats` | Allan / LOD 基座等统计工具 |
-| `devices` | 器件库字段规则 `DEVICE_FIELD_RULES`：只约束类型/量纲，**零默认仪器** |
+| `interaction` / `interaction_server` | 动作证据解析、指纹、按需下发；四技术 DISPATCH 统一包装 |
+| `validation` | 轻量 `checks[]` 与 `overall` 归并（CRDS/NDIR/FTIR/DOAS 共用） |
 
 ## 接口约定
 

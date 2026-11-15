@@ -40,6 +40,9 @@ _WS_ROOT = str(_ROOT.parent)
 from spectrolink_core.mcp_runtime import (                     # noqa: E402
     make_handle_request, schema_index, serve_stdio)
 from spectrolink_core.sanitize import make_path_sanitizer      # noqa: E402
+from spectrolink_core.interaction import ev_ok                  # noqa: E402
+from spectrolink_core.interaction_server import install_interaction  # noqa: E402
+from spectrolink_core.validation import check, validation_block  # noqa: E402
 
 _sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
 
@@ -176,8 +179,27 @@ def t_crds_simulate(L_m=1.0, R=0.999, x=1e-5, nu0=2968.41, nu_span=2.0, n_nu=201
         out["png"] = _plot_crds(L_m, R, x, nu0, nu_span, n_nu, T, P,
                                 species, iso, alpha_pk_fallback,
                                 gamma_fallback, fit_noise, seed, out_path)
-    out["validation"] = {"overall": "warn",
-                         "note": "默认参数为演示占位；line_source=hitran 但谱源降级时不得当实测谱"}
+    checks = [
+        check("concentration_in_range",
+              "pass" if 0 <= out.get("x_inferred", -1) <= 1 else "fail",
+              "反演摩尔分数须落在 [0, 1]", out.get("x_inferred")),
+        check("concentration_error",
+              "pass" if abs(out.get("x_error_frac", 0)) < 0.05 else "warn",
+              "无噪声正演反演误差应 <5%", out.get("x_error_frac")),
+        check("ringdown_fit",
+              "pass" if (out.get("ringdown_fit") or {}).get("r2", 0) >= 0.99 else "warn",
+              "ring-down 对数拟合 R² 应 ≥0.99",
+              (out.get("ringdown_fit") or {}).get("r2")),
+        check("tau_dynamic_range",
+              "fail" if -(out.get("tau_minus_tau0_frac") or 0) > 0.98 else
+              "warn" if -(out.get("tau_minus_tau0_frac") or 0) > 0.5 else "pass",
+              "τ 相对空腔缩短 >50% 接近可测量边界，>98% 无法定量",
+              out.get("tau_minus_tau0_frac")),
+        check("line_source", "pass" if out.get("line_source") == "hitran" else "warn",
+              "非 HITRAN 谱源只能作演示", out.get("line_source")),
+    ]
+    out["validation"] = validation_block(
+        checks, note="默认参数为演示占位；line_source=hitran 但谱源降级时不得当实测谱")
     return out
 
 
@@ -187,23 +209,113 @@ def t_crds_ringdown(tau_s=3.333e-6, i0=1.0, t_end=2e-5, n_pts=201,
     t = [t_end * i / (n_pts - 1) for i in range(n_pts)]
     i_sig = cph.ring_down(t, tau_s, i0, noise_frac, seed)
     fit = cph.fit_tau(t, i_sig)
-    return {"tau_truth": tau_s, "tau_fit": fit["tau_s"] if fit else None,
-            "i0_fit": fit["i0_fit"] if fit else None,
-            "tau_err_frac": round(abs(fit["tau_s"] - tau_s) / tau_s, 9) if fit else None,
-            "r2": fit["r2"] if fit else None, "n_pts": n_pts,
-            "formula": "τ = −1/斜率(ln I vs t)；α = 1/(cτ) − (1−R)/L"}
+    out = {"tau_truth": tau_s, "tau_fit": fit["tau_s"] if fit else None,
+           "i0_fit": fit["i0_fit"] if fit else None,
+           "tau_err_frac": round(abs(fit["tau_s"] - tau_s) / tau_s, 9) if fit else None,
+           "r2": fit["r2"] if fit else None, "n_pts": n_pts,
+           "formula": "τ = −1/斜率(ln I vs t)；α = 1/(cτ) − (1−R)/L"}
+    out["validation"] = validation_block([
+        check("tau_fit_available", "pass" if fit else "fail",
+              "对数线性拟合须成功"),
+        check("tau_error",
+              "pass" if out["tau_err_frac"] is not None and out["tau_err_frac"] < 0.05 else "warn",
+              "τ 相对误差应 <5%", out["tau_err_frac"]),
+        check("fit_r2",
+              "pass" if out["r2"] is not None and out["r2"] >= 0.99 else "warn",
+              "ring-down 拟合 R² 应 ≥0.99", out["r2"]),
+    ])
+    return out
 
 
 def t_crds_invert(tau_meas=3.2e-6, L_m=1.0, R=0.999, alpha_pure_pk=13.365):
     """测量衰荡时间 → 单程吸收 → 浓度 x = α/α_pure_pk。"""
     alpha = cph.alpha_from_tau(tau_meas, L_m, R)
     x = cph.invert(tau_meas, L_m, R, alpha_pure_pk)
-    return {"alpha_cm": round(alpha, 9), "x": round(x, 9), "x_ppm": round(x * 1e6, 6)}
+    out = {"alpha_cm": round(alpha, 9), "x": round(x, 9), "x_ppm": round(x * 1e6, 6)}
+    out["validation"] = validation_block([
+        check("concentration_in_range",
+              "pass" if 0 <= x <= 1 else "fail",
+              "反演摩尔分数须落在 [0, 1]", x),
+        check("absorption_nonnegative", "pass" if alpha >= 0 else "fail",
+              "单程吸收 α 须非负（τ 不应高于空腔 τ0）", alpha),
+    ])
+    return out
 
 
 def t_crds_selftest():
     """数值锚点自检（离线）。"""
     return cph.selftest()
+
+
+def _actions(out, tool):
+    """CRDS 的下一步动作：只依据本工具真实返回的字段。"""
+    acts = []
+
+    def add(aid, severity, text, evidence):
+        if all(ev_ok(out, p) for p in evidence):
+            acts.append({"id": aid, "severity": severity, "action": text,
+                         "evidence_fields": evidence})
+
+    note = (out.get("validation") or {}).get("note")
+    if note:
+        add("disclose_validation_note", "must_disclose",
+            f"校验提示：{note}", ["validation.note"])
+
+    x = out.get("x_inferred", out.get("x"))
+    if isinstance(x, (int, float)) and not 0 <= x <= 1:
+        add("concentration_unusable", _SEV_BLOCK,
+            f"反演浓度 x={x:.6g} 不在 [0, 1]；检查 τ 是否低于空腔 τ0、镜面反射率/腔长是否同源",
+            ["x_inferred"] if "x_inferred" in out else ["x"])
+
+    err = out.get("x_error_frac")
+    if isinstance(err, (int, float)) and abs(err) >= 0.05:
+        add("disclose_concentration_error", "must_disclose",
+            f"反演相对误差 {abs(err):.1%} ≥ 5%，不得把该值当作精确标定结果",
+            ["x_error_frac"])
+
+    r2 = (out.get("ringdown_fit") or {}).get("r2")
+    if isinstance(r2, (int, float)) and r2 < 0.99:
+        add("disclose_ringdown_fit", "must_disclose",
+            f"ring-down 对数拟合 R²={r2:.3g} < 0.99；τ 估计受噪声/截断影响",
+            ["ringdown_fit.r2"])
+
+    tau_err = out.get("tau_err_frac")
+    if isinstance(tau_err, (int, float)) and tau_err >= 0.05:
+        add("disclose_tau_error", "must_disclose",
+            f"衰荡时间相对误差 {tau_err:.1%} ≥ 5%，τ 估计不可直接用于痕量定量",
+            ["tau_err_frac"])
+
+    tau_frac = out.get("tau_minus_tau0_frac")
+    if isinstance(tau_frac, (int, float)):
+        shorten = -tau_frac
+        if shorten >= 0.98:
+            add("tau_dynamic_range", "block_conclusion",
+                f"τ 相对空腔缩短 {shorten:.1%} ≥ 98%，信号已贴噪声/带宽边界，不得定量",
+                ["tau_minus_tau0_frac"])
+        elif shorten >= 0.5:
+            add("disclose_tau_dynamic_range", "must_disclose",
+                f"τ 相对空腔缩短 {shorten:.1%} ≥ 50%，接近可测量边界，需核对采样率与动态范围",
+                ["tau_minus_tau0_frac"])
+
+    top_r2 = out.get("r2")
+    if isinstance(top_r2, (int, float)) and top_r2 < 0.99:
+        add("disclose_ringdown_fit_top", "must_disclose",
+            f"ring-down 拟合 R²={top_r2:.3g} < 0.99", ["r2"])
+
+    if out.get("line_source") not in (None, "hitran"):
+        add("disclose_line_source", "must_disclose",
+            f"谱源为 {out['line_source']}（非 HITRAN），只作演示、不能冒充真实吸收谱",
+            ["line_source"])
+
+    if isinstance(out.get("assumptions"), dict) and out["assumptions"]:
+        add("disclose_defaults", "must_disclose",
+            "默认腔长/反射率/热力学参数是演示占位；定量前须由用户实测或 datasheet 覆盖",
+            ["assumptions"])
+    return acts
+
+
+_SESSION_FILE = None            # 进程内会话，避免给只读安装目录添写盘依赖
+_SEV_BLOCK = "block_conclusion"
 
 
 TOOLS = [
@@ -250,6 +362,10 @@ TOOLS = [
 ]
 
 DISPATCH = {t["name"]: globals()[t["name"]] for t in TOOLS}
+
+# 仪器/分析工具返回 interaction；selftest 不参与契约、不写会话
+install_interaction(DISPATCH, TOOLS, _SESSION_FILE, _actions,
+                    sev_block=_SEV_BLOCK, skip={"t_crds_selftest"})
 
 
 # ── 参数校验 / JSON-RPC（共用 spectrolink_core.mcp_runtime）────────────

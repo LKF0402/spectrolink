@@ -164,9 +164,12 @@ def calibrate(x_min: float = 0.0, x_max: float = 2e-5, n: int = 11,
     slope, intercept = np.polyfit(xs, invs, 1)
     r2 = 1.0 - float(np.sum((invs - (slope * xs + intercept)) ** 2)) / max(
         float(np.sum((invs - invs.mean()) ** 2)), 1e-300)
+    # 误差归一化到浓度满量程：x=0 处不能做“相对自身”除法（否则分母趋 0 → 虚假巨值）
+    scale = max(abs(x_max), abs(x_min), 1e-30)
+    max_err_frac = float(np.max(np.abs(invs - xs)) / scale)
     return {"n_points": n, "slope": round(float(slope), 6),
             "intercept": round(float(intercept), 9), "r_squared": round(r2, 6),
-            "max_abs_err_frac": round(float(np.max(np.abs(invs - xs) / np.maximum(np.abs(xs), 1e-30))), 6),
+            "max_abs_err_frac": round(max_err_frac, 6),
             "source": "default=ai_demo_placeholder; 真实截面须用户提供"}
 
 
@@ -219,9 +222,12 @@ def selftest():
     cal = calibrate(0.0, 2e-5, 11, noise_frac=0.0)
     if cal["r_squared"] < 0.999 or abs(cal["slope"] - 1.0) > 0.02:
         fails.append(f"标定曲线异常 (slope={cal['slope']}, R²={cal['r_squared']})")
+    if cal["max_abs_err_frac"] > 0.01:
+        fails.append(f"标定归一化最大误差超限 ({cal['max_abs_err_frac']:.3g})")
     return {
         "ok": not fails, "fails": fails,
         "anchors": {"noise_mean_err_frac": round(abs(mean - 5e-6) / 5e-6, 6),
                     "noise_std": round(std, 9),
-                    "cal_slope": cal["slope"], "cal_r2": cal["r_squared"]},
+                    "cal_slope": cal["slope"], "cal_r2": cal["r_squared"],
+                    "cal_max_err_frac": cal["max_abs_err_frac"]},
     }

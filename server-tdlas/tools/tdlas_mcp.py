@@ -93,6 +93,9 @@ from spectrolink_core.mcp_runtime import (                      # noqa: E402
     make_handle_request, serve_stdio, validate_args)
 from spectrolink_core.sanitize import make_path_sanitizer       # noqa: E402
 
+# 契约测试按 M.* 读取，运行时不用；显式引用一次，避免静态检查误删。
+_CONTRACT_EXPORTS = (_SESSION_FILE, _DEVICE_FILE, CONTRACT_BLOCKS, _WMS_ONLY_KEYS)
+
 # 递归脱敏：把 <workspace> / <home> 绝对路径替换成中性标记（实现见 spectrolink_core）
 _sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
 

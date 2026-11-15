@@ -38,6 +38,9 @@ _WS_ROOT = str(_ROOT.parent)
 from spectrolink_core.mcp_runtime import (                     # noqa: E402
     make_handle_request, schema_index, serve_stdio)
 from spectrolink_core.sanitize import make_path_sanitizer      # noqa: E402
+from spectrolink_core.interaction import ev_ok                  # noqa: E402
+from spectrolink_core.interaction_server import install_interaction  # noqa: E402
+from spectrolink_core.validation import check, validation_block  # noqa: E402
 
 _sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
 
@@ -53,29 +56,112 @@ def t_doas_forward(x=5e-6, L_cm=50.0, species="NO2", wl_min=400.0, wl_max=500.0,
     """
     out = dph.forward(x, L_cm, species, wl_min, wl_max, n_wl, T, P, poly_deg,
                       noise_frac, seed)
-    out["validation"] = {"overall": "warn",
-                         "note": "默认截面/源为演示占位，未标定前不可作定量结论"}
+    checks = [
+        check("concentration_in_range",
+              "pass" if 0 <= out.get("x_inferred", -1) <= 1 else "fail",
+              "反演摩尔分数须落在 [0, 1]", out.get("x_inferred")),
+        check("optical_depth", "pass" if 0 < out.get("od_peak", -1) <= 2 else "warn",
+              "峰光学厚度应 >0 且 ≤2（过强吸收会破坏差分线性）", out.get("od_peak")),
+        check("concentration_error",
+              "pass" if abs(out.get("x_error_frac", 0)) < 0.05 else "warn",
+              "无噪声正演反演误差应 <5%", out.get("x_error_frac")),
+    ]
+    out["validation"] = validation_block(
+        checks, note="默认截面/源为演示占位，未标定前不可作定量结论")
     return out
 
 
 def t_doas_calibrate(x_min=0.0, x_max=2e-5, n=11, L_cm=50.0, species="NO2",
                      T=296.0, P=1.0, poly_deg=3, noise_frac=0.0, seed=0):
     """浓度扫描标定：x_min..x_max 等距 n 点 → 反演浓度表 + 线性拟合。"""
-    return dph.calibrate(x_min, x_max, n, L_cm, species, T, P, poly_deg,
-                         noise_frac, seed)
+    out = dph.calibrate(x_min, x_max, n, L_cm, species, T, P, poly_deg,
+                        noise_frac, seed)
+    checks = [
+        check("fit_r2", "pass" if out.get("r_squared", 0) >= 0.999 else "warn",
+              "标定线性拟合 R² 应 ≥0.999", out.get("r_squared")),
+        check("slope", "pass" if abs(out.get("slope", 0) - 1) <= 0.02 else "warn",
+              "标定斜率应≈1（反演浓度对真值）", out.get("slope")),
+        check("max_error", "pass" if out.get("max_abs_err_frac", 1) <= 0.01 else "warn",
+              "归一化最大绝对误差应 ≤1% 满量程", out.get("max_abs_err_frac")),
+    ]
+    out["validation"] = validation_block(
+        checks, note="默认截面/源为演示占位；标定斜率仅验证算法，不代表真实器件")
+    return out
 
 
 def t_doas_invert(I=None, i0=None, sigma=None, L_cm=50.0, poly_deg=3):
     """实测谱 → 差分反演浓度（等长数组 I/i0/sigma；不传数组给用法提示）。"""
     if I is None or i0 is None or sigma is None:
         return {"usage": "传等长数值数组 I（实测光强）、i0（参考光强）、sigma（吸收截面 cm²/molecule）",
-                "x": None}
-    return dph.invert(I, i0, sigma, L_cm, poly_deg)
+                "x": None,
+                "validation": validation_block([
+                    check("input_present", "fail", "缺 I/i0/sigma，无法反演")])}
+    out = dph.invert(I, i0, sigma, L_cm, poly_deg)
+    if out.get("x") is None:
+        out["validation"] = validation_block([
+            check("input_shape", "fail", out.get("usage", "I/i0/sigma 不合法"))])
+    else:
+        out["validation"] = validation_block([
+            check("concentration_in_range",
+                  "pass" if 0 <= out["x"] <= 1 else "fail",
+                  "反演摩尔分数须落在 [0, 1]", out["x"]),
+        ])
+    return out
 
 
 def t_doas_selftest():
     """数值锚点自检（离线，不依赖网络）。"""
     return dph.selftest()
+
+
+def _actions(out, tool):
+    acts = []
+
+    def add(aid, severity, text, evidence):
+        if all(ev_ok(out, p) for p in evidence):
+            acts.append({"id": aid, "severity": severity, "action": text,
+                         "evidence_fields": evidence})
+
+    if out.get("x") is None and "usage" in out:
+        add("input_required", _SEV_BLOCK,
+            f"尚未输入可用实测谱：{out['usage']}", ["usage", "x"])
+
+    note = (out.get("validation") or {}).get("note")
+    if note:
+        add("disclose_validation_note", "must_disclose",
+            f"校验提示：{note}", ["validation.note"])
+
+    x = out.get("x_inferred", out.get("x"))
+    if isinstance(x, (int, float)) and not 0 <= x <= 1:
+        add("concentration_unusable", _SEV_BLOCK,
+            f"反演浓度 x={x:.6g} 不在 [0, 1]；检查差分背景阶数、截面与光程是否同源",
+            ["x_inferred"] if "x_inferred" in out else ["x"])
+
+    od = out.get("od_peak")
+    if isinstance(od, (int, float)) and od > 2:
+        add("disclose_strong_absorption", "must_disclose",
+            f"峰光学厚度 {od:.3g} >2；强吸收下差分线性近似失真",
+            ["od_peak"])
+
+    err = out.get("x_error_frac")
+    if isinstance(err, (int, float)) and abs(err) >= 0.05:
+        add("disclose_concentration_error", "must_disclose",
+            f"反演相对误差 {abs(err):.1%} ≥ 5%，不得当作精确结果",
+            ["x_error_frac"])
+
+    if isinstance(out.get("r_squared"), (int, float)) and out["r_squared"] < 0.999:
+        add("disclose_calibration_fit", "must_disclose",
+            f"标定 R²={out['r_squared']:.3g} < 0.999；线性标定不可直接用于定量",
+            ["r_squared"])
+    if isinstance(out.get("max_abs_err_frac"), (int, float)) and out["max_abs_err_frac"] > 0.01:
+        add("disclose_calibration_error", "must_disclose",
+            f"标定归一化最大误差 {out['max_abs_err_frac']:.1%} > 1% 满量程",
+            ["max_abs_err_frac"])
+    return acts
+
+
+_SESSION_FILE = None
+_SEV_BLOCK = "block_conclusion"
 
 
 TOOLS = [
@@ -126,6 +212,8 @@ TOOLS = [
 # ── MCP 协议层（共用 spectrolink_core.mcp_runtime）────────────────
 
 DISPATCH = {t["name"]: globals()[t["name"]] for t in TOOLS}
+install_interaction(DISPATCH, TOOLS, _SESSION_FILE, _actions,
+                    sev_block=_SEV_BLOCK, skip={"t_doas_selftest"})
 _SCHEMA_BY_NAME = schema_index(TOOLS)
 
 # 此前是自写的弱口径：无批量/通知、无必填/未知键/类型校验，还能吃位置参数

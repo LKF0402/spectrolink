@@ -45,8 +45,9 @@ NDIR 用**宽带红外源 + 窄带滤光片**，不扫谱、无激光：
 
 ## 交互契约
 
-- `validation.overall`：`fail` 不得下结论；`warn`（默认演示占位）须披露。
-- 标定结果用 `t_ndir_calibrate` 的 `A_fit`（=k_s·L_s−k_r·L_r）作为反演输入，勿手抄。
+- 仪器/分析工具返回 `interaction` 与 `next_required_actions`；`conclusion_allowed=false`（浓度越界、`A_net≤0`）时不得给定量结论，`must_disclose` 项须在同一回答说明。`t_ndir_selftest` 不返回契约块。
+- `validation.overall`：`fail` 不得下结论；`warn`（默认演示占位）须披露。标定 `fit.r2`、`R0_fit`、`A_match` 逐项写在 `checks[]`。
+- 标定结果用 `t_ndir_calibrate` 的 `A_fit`（=k_s·L_s−k_r·L_r）作为反演输入，勿手抄；`R0_fit≈1` 是截距/符号正确的守卫。
 
 ## 使用声明
 
