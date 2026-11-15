@@ -38,7 +38,6 @@
 
 from __future__ import annotations
 
-import cmath
 import math
 import re
 import sys
@@ -153,7 +152,6 @@ def independent_alpha(trans, nu_grid, T, P, const):
 # HAPI 侧
 # ══════════════════════════════════════════════════════════════════════
 def hapi_alpha(species, numin, numax, T, P, step, winghw):
-    import hapi  # type: ignore
     from spectrolink_core import hitran as th
     nu, alpha, info = th.absorption(species, numin, numax, T=T, P=P, step=step, wingHW=winghw)
     return nu, alpha, info
@@ -199,8 +197,7 @@ def main(argv):
     for tag, species, wn0, half, step in cases:
         numin, numax = wn0 - half, wn0 + half
         nu, a_hapi, info = hapi_alpha(species, numin, numax, T, P, step, 20.0)
-        table = info["table"]
-        M, I = info["M"], info["iso"]
+        I = info["iso"]
 
         # 自己取线参数并独立累加（同窗口）
         formula, MM = th.resolve(species)

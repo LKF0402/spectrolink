@@ -16,7 +16,7 @@
 - [8. 已知近似与局限](#8-已知近似与局限)
 - [9. 实现陷阱（踩坑记录）](#9-实现陷阱踩坑记录)
 - [10. 保真度台账与行为审计](#10-保真度台账与行为审计)
-  - [10.5 未接线的编排层（必须知道的现状）](#105--未接线的编排层必须知道的现状)
+  - [10.5 契约编排层：从孤儿代码到唯一路径](#105-契约编排层从孤儿代码到唯一路径)
 - [11. 参考文献](#11-参考文献)
 
 ---
@@ -468,42 +468,25 @@ f0 与 Q 取常压空气公开实测锚点（Wang 2020 表 1 "STANDARD"），**�
 
 ---
 
-### 10.5 ★ 未接线的编排层（必须知道的现状）
+### 10.5 契约编排层：从孤儿代码到唯一路径
 
-`lites_mcp.py` 里保留了 TDLAS 时代的**契约编排层**，但 LITES 工具链路**从未调用**它们 ——
-它们是"定义了但无引用"的孤儿代码（约 217 行）：
+**历史问题**：`lites_mcp.py` 曾保留 TDLAS 时代的契约编排层（约 217 行）却**从未被工具链调用**，
+文档若按这些函数的能力书写，就是在承诺不存在的功能。
 
-| 函数 | 行范围 | 行数 | 提供的能力 |
-|---|---|---|---|
-| `_interaction_block` | 392–459 | 68 | `severity` 三级 / `conclusion_allowed` / `blocking_reason` / 动作抑制 |
-| `_resolve_devices` | 542–575 | 34 | 器件库整机 `setup=` 与分组解析 |
-| `_alpha_report_block` | 140–171 | 32 | α 语境自适应播报 |
-| `_fringe_report_block` | 174–205 | 32 | etalon 语境自适应播报 |
-| `build_clarify_questions` | 692–714 | 23 | 澄清问题库 |
-| `_fidelity_digest` | 243–253 | 11 | 保真度精简块（转发台账） |
-| `_species_defaults` | 607–614 | 8 | 物种推荐工况 |
-| `_DEVICE_TYPES` | 468–474 | 7 | 器件类型表 |
-| `_save_devices` | 538–539 | 2 | 设备库落盘 |
+**处理原则**：不是"全部接线"，而是按 LITES 真实模型逐项筛选：
 
-**为什么留着**：这些是**能力**而不是垃圾。LITES 侧当前只产出**朴素**契约
-（`next_required_actions` / `disclosure_pending` 都是字符串列表，`interaction` 多为 `{}`），
-而这些函数实现了明显更强的语义。
+| 处理 | 对象 | 理由 |
+|---|---|---|
+| **接线** | `_interaction_block`（`_wrap` 对 9 个仪器/分析工具统一调用） | 提供 `severity` 三级、`conclusion_allowed` / `blocking_reason` / `stage`、同语境动作抑制、默认值逐项披露 |
+| **重写** | `build_next_actions` | 旧版照抄 TDLAS 字段（`warnings` / `normalization` / `fidelity` / `clarify`），LITES 从不产出；现只依据 `validation` / `result.x` / `linearity_check` / `assumptions` / `findings` |
+| **删除** | `_alpha_report_block`、`_fringe_report_block`、`_resolve_devices`、`build_clarify_questions`、`_fidelity_digest`、`_species_defaults`、`adaptive_condition`、`_DEVICE_*`、`AI_INTERACTION_GUIDE` | LITES 没有 α 报告语境、etalon 模型、TDLAS 式器件库/物种库/激光可达性 |
+| **删除** | `lites_device(action="groups")` | 只有占位返回，无真实分组；保留即假功能 |
 
-**为什么不能就这么留着**：文档若按它们的能力来写，就是在**承诺不存在的功能**。
-本项目的 `lites_fidelity.py` 存在的理由正是消灭这一类"声明了却没接上"——
-孤儿编排层是同一类问题在**架构层**的残留。
+**当前语义**：`next_required_actions` 是带 `id` / `severity` / `values` 的 dict 列表；
+`interaction` 在 9 个仪器/分析工具中存在，`guide` / `device` / `selftest` 不返回。
 
-**两种收尾方式（择一）**：
-
-- **(a) 接线**：把这些函数接回 LITES 工具链路，升级契约语义。
-  路线：工具层不再自己构造 `_block()`，改由 MCP 层统一调 `_interaction_block(out)`
-  并按 `severity` 排序下发；`alpha`/`fringe` 语境按会话态抑制重复。
-  → 收益大，工作量中等。
-- **(b) 删除**：移除这 217 行，文档永久对齐当前朴素语义。
-  → 收益是消除"文档骗人"的风险，代价是放弃已有实现。
-
-> **当前状态**：未接线。README / SKILL.md / docs/VALIDATION.md 已按**实际**语义书写，
-> 并显式标注该层未生效（`docs/VALIDATION.md` §5.1）。**下一步应先定 (a) 还是 (b)。**
+**边界**：动作清单只覆盖**已建模**判据，`conclusion_allowed=true` 不等于物理正确性证明。
+详见 `docs/VALIDATION.md` §5.1。
 
 ---
 

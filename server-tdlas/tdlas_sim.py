@@ -2557,7 +2557,7 @@ def plot_wms_instrument(r, out_png, panels="all", multi=None):
     use_cjk_font(matplotlib)
 
     m = r["meta"]
-    nu, off, ok = r["nu_axis"], r["offband_mask"], m["onef_valid"]
+    nu, ok = r["nu_axis"], m["onef_valid"]
     vd = r["valid_mask"]
     # 多浓度叠加：multi=[(ppm, result)]；不足 2 个浓度则退化为原单浓度画法
     multi = [it for it in (multi or []) if it and len(it) == 2]

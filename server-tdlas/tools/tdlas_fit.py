@@ -29,7 +29,6 @@
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 
 def fit_concentration_ls(measured, k_per_unit_x, valid=None, sigma=None):

@@ -158,7 +158,7 @@ finally:
     ts.simulate_wms_instrument = _orig
 for k in _want_wms:
     check(f"WMS 透传 {k}", k in store, f"= {store.get(k)!r}")
-print(f"  透传样本: " + ", ".join(f"{k}={store.get(k)!r}" for k in
+print("  透传样本: " + ", ".join(f"{k}={store.get(k)!r}" for k in
                                 ("edge", "trim_frac", "d2nu_dI2", "am_i0", "physical_noise")))
 
 store2 = {}
@@ -920,7 +920,6 @@ check("默认 lock_kind='boxcar' 且 zero_phase=False（保持既有行为）",
 check("lock_kind / zero_phase 进了透传白名单（否则 schema 接不上）",
       "lock_kind" in M._WMS_ONLY_KEYS and "zero_phase" in M._WMS_ONLY_KEYS)
 try:
-    import numpy as _np
     _fs, _fm = 240000.0, 30000.0
     _N = 1000
     _t = _np.arange(_N) / _fs

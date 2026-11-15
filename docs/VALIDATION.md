@@ -132,6 +132,11 @@
 
 ## 7. 修订记录
 
+- **2026-11-15（第二十四轮补充：LITES 交互契约接线）**
+  - `lites_mcp` 的 `_interaction_block` 此前未被任何工具调用：`interaction` 恒为 `{}`、`next_required_actions` 恒为空。现 9 个仪器/分析工具统一下发，动作清单只依据 LITES **真实产出**的字段（`validation` / `result.x` / `linearity_check` / `assumptions` / `findings`），不再照抄 TDLAS 的 `warnings` / `normalization` / `fidelity` / `clarify`。
+  - `lites_invert` 新增 `validation`：`x ∉ (0,1]` 判 `fail`，`αL ≥ 0.05` 判 `warn`；报出浓度时强制披露"未附不确定度"。注意：LITES 的 `validation` 只覆盖反演域与弱吸收线性区，**不等价于** TDLAS 的 10 项仪器校验。
+  - 会话文件不可写时降级为"不记账、每次重新下发"，只读安装不会因此让工具调用失败。
+
 - **2026-09-14**
   - 默认跨阻增益 `1e3 → 700`：旧默认使默认工况 `v_pd≈10.9 V` 超出 ±10 V 量程 → ADC 默认即饱和、
     `tdlas_review` 默认必 fail；现默认工况 `v_pd≈7.7 V`。

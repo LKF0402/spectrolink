@@ -88,28 +88,28 @@ description: SpectroLink 子服务器 server-lites（L2 参考，AI 自动读取
 
 ### 1. 交互契约（最高优先级：先读返回值，再谈表达）
 
-每次工具返回里都有三个**机器可读**字段（MCP 层 `_wrap()` 保证它们一定存在）：
+每次仪器/分析工具与 `lites_guide` 的返回里都有三个**机器可读**字段（MCP 层 `_wrap()` 或 `_block()` 保证）；`lites_selftest` 只返回 `{ok, log}`，不参与交互契约：
 
 ```json
 "assumptions":        ["……用了默认值/近似的地方……"],
-"next_required_actions": ["……你下一步必须做的事（字符串列表）……"],
-"disclosure_pending": ["……必须随结论一并向用户说明的事……"],
-"interaction":        {}   // 少数工具会填，给出"还能问什么"
+"next_required_actions": [
+  {"id": "disclose_defaults", "severity": "must_disclose",
+   "action": "……本次必须说明的默认值……", "values": {"…": "…"}, "template": "……"}
+],
+"disclosure_pending": ["disclose_defaults", "……本会话已下发过的动作 id（仍需覆盖）……"],
+"interaction":        {"stage": "produced", "conclusion_allowed": true,
+                       "blocking_reason": null, "physics_ok": true, "result_usable": true}
 ```
 
 **执行方式**：
 
-- `next_required_actions` —— **逐条照做**。它们是服务器判定的、本次结果所必需的动作。
+- `next_required_actions` —— **逐条照做**。`severity` 三级：`block_conclusion`（未满足不得给定量结论）、`must_disclose`（结论可给但必须在同一回答说明）、`advisory`（建议）。
 - `disclosure_pending` —— **必须覆盖**。里面的每一条都要在同一回答里出现，缺一条就是把结果当成比它更可信的东西报出去了。
 - `assumptions` —— 说明哪些参数用了默认值；给定量结论时要标注。
-- `interaction` —— 部分工具会给"下一步可以问什么"的建议字段；为空即无建议。
+- `interaction` —— `conclusion_allowed` / `blocking_reason` / `stage`（`clarify` / `produced` / `verified`）；不得把 `conclusion_allowed=true` 当成物理正确性的证明。
 
-> ⚠️ **诚实声明（勿按设计稿想象）**：本项目**未**实现 `severity` 三级分级
-> （`block_conclusion` / `must_disclose` / `advisory`），也**未**实现
-> `interaction.conclusion_allowed` / `blocking_reason` 与"同语境不重复下发"的抑制。
-> 这些是 `lites_mcp.py` 里 TDLAS 时代留下的**未接线**能力（见 TECHNICAL.md §10.5），
-> 当前**不生效**。判断"能否下结论"请直接看工具返回的 `verdict` / `warn_count` /
-> `blocking` 类字段本身，而**不要**去读一个不存在的 `conclusion_allowed`。
+> ⚠️ **边界声明**：动作清单只覆盖**已建模**的判据（`validation` 的 fail/warn、`x` 是否落在 `(0,1]`、`αL` 是否进入非线性区（`linearity_check.alphaL` / `conditions.alphaL` / `metrics.alphaL`，阈值 0.05）、`findings` 的 warn、`assumptions` 的默认值、`sweep` 的 `power_law_index` 是否偏离 1）。α 语境与 etalon 条纹的专门播报**未实现**（LITES 无 etalon 模型；α 相关前提按 `assumptions` 披露）。
+
 
 **两条经实测标定的口径**：
 
@@ -181,10 +181,14 @@ description: SpectroLink 子服务器 server-lites（L2 参考，AI 自动读取
 - **石英基底光学常数**：Franta et al. (2019) 实验拟合
 - 输入波数（或波长），输出 κ_A = 器件吸收率（吸收的光功率占入射比例）
 
-在 `lites_waveform` 里传 `wn_cm1` 参数即可自动启用：
+在 `lites_forward` 里传 `wn_cm1` 参数即可自动启用：
 - 信号按 `κ_A(λ) / κ_A(λ_cal)` 缩放（基准是标定波长处的 η_dev）
 - 不同波段的信号量级差异自动体现（如 1.65 μm vs 4.6 μm）
 - 不传 `wn_cm1` 则退回到原标定基准（向后兼容）
+
+`lites_waveform` 另有真实波段模式：传 `gas` + `wn_center`（可配 `scan_span_cm`、`iso`）
+即用 HITRAN 多线剖面替换单线，密集谱区的邻近线贡献完整保留；不传 `gas` 则用
+`line_strength` 的单线近似。
 
 ## 关键物理约束（已知坑点）
 

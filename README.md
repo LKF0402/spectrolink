@@ -28,7 +28,7 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 
 | 模块 | 作用 |
 |---|---|
-| **spectrolink_core** | 共用内核：HITRAN 线表/缓存/指纹、Voigt、线强外推、同位素叠加、Allan/LOD 基座、器件库 schema；**MCP 协议层（stdio JSON-RPC）与状态文件原子写也只此一份**（独立依赖包，`pip install -e ./spectrolink_core`） |
+| **spectrolink_core** | 共用内核：HITRAN 线表/缓存/指纹、Voigt、线强外推、同位素叠加、Allan/LOD 基座、器件库 schema；**MCP 协议层（stdio JSON-RPC）、状态文件原子写、会话报告块、交互契约记账与保真度判定也只此一份**（独立依赖包，`pip install -e ./spectrolink_core`） |
 | **server-tdlas** | TDLAS-DA / TDLAS-WMS 独立 MCP 服务器（工具 `t_*`） |
 | **server-lites** | LITES 独立 MCP 服务器（工具 `l_*`） |
 | **server-ndir** | NDIR（非分散红外）独立 MCP 服务器（工具 `t_ndir_*`） |
@@ -48,7 +48,7 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 - **全链路建模**：DAQ 调制 → 激光调谐 → HITRAN 吸收 → PD → ADC → 数字锁相；可选 etalon 条纹、RIN、1/f 漂移、RAM/AM
 - **七技术一体**：TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS，独立 server 按需加载、共用 `spectrolink_core` 物理内核
 - **混合气多组分**：`mixture` 严格按 `α = Σ xᵢ·α_pureᵢ(T,P)` 逐点相加（**不用 x·P 当分压**），并返回各组分归因
-- **AI 交互契约**：返回值携带 `interaction` 与机器可读的 `next_required_actions`——"必须澄清 / 必须披露"由返回值承载
+- **AI 交互契约**：TDLAS / LITES 的仪器与分析工具返回 `interaction` 与机器可读 `next_required_actions`；CRDS / NDIR / FTIR / DOAS 目前返回 `validation`（默认参数与模型降级提示），动作清单尚未接入
 - **保真度台账**：默认生效 11 项 / 需显式开启 6 项 / **未建模 7 项**，未建模项随结果披露
 - **可信度分层**：10 项物理校验与交互合规**分别**计分
 - **可复现 + 离线门禁**：`seed=0` 逐位可复现；契约自检 191 项与保真度审计均为 CI 硬门禁（不依赖网络）

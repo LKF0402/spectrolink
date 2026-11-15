@@ -25,7 +25,6 @@
 """
 from __future__ import annotations
 
-import math
 
 try:
     import numpy as np

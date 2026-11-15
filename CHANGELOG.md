@@ -9,11 +9,22 @@
 - 行为统一为严格口径：crds/ndir/ftir 此前**不校验必填与未知键**（拼错参数名被静默丢弃、工具照常返回"看起来正常"的结果），doas 此前无批量/通知/校验且能吃位置参数——现全部与 tdlas 同一严格语义
 - 新建 `spectrolink_core/jsonio.py`：`atomic_write_text` 从 `lites_mcp` 与 `tdlas_state` 两份 28 行副本收敛为一份（Windows `os.replace` 重试/降级语义不变）
 - 新建 `spectrolink_core/fidelity.py`：`audit_effects` / `fidelity_summary` 的判定逻辑从 tdlas/lites 两份 fidelity 脚本收敛为一份（各技术只保留 EFFECTS 登记表与薄封装），两套口径不再可能漂移
+- 新建 `spectrolink_core/interaction.py`：证据路径解析（`ev_ok`）、动作指纹（`action_sig`）、按需下发与 stage 判定（`interaction_block`）收敛为一份；各 server 只提供本技术的动作清单与严重度常量——此前这段 68 行在 tdlas/lites 各有一份，`conclusion_allowed` 语义存在漂移风险
+- 新建 `spectrolink_core/report_blocks.py`：工况取值、物种缺省、设备参数校验、α 语境播报、etalon 条纹播报的判定与措辞收敛为一份（会话读写由各 server 以回调注入）
+- 删除 lites 从 tdlas 拷来但从未接线的死代码：`_resolve_conditions`（引用了根本不存在的 `_SCENE_DEFAULTS`，一旦调用必 NameError）、`_species_defaults`、`_alpha_report_block`、`_fringe_report_block`，以及 `build_next_actions` 里永远无法触发的 α/条纹分支与对应说明（LITES 没有 etalon 模型，原说明会让 AI 去找不存在的字段）
 - 删除死代码：`tdlas_mcp.apply_contract_blocks`（从未被调用，契约块由各工具手拼、契约自检直接调 `CONTRACT_BLOCK_PRODUCERS` 校验）、`tdlas_constants._MEANINGLESS_NAME_RE`（定义为 None 且全仓无引用）
 - 未用 import 清零：`tdlas_mcp` 去掉 `QUANTITATIVE_BLOCKS` / `_DEVICE_RULES` / `_MEANINGLESS_NAME_RE`（`_WMS_ONLY_KEYS` 保留，契约自检按模块属性读取）
 - 宽异常收窄：可选依赖加载 `ImportError`；`lites_tools` 斜率拟合收窄到 `ValueError/TypeError/LinAlgError`、设备构建收窄到 `TypeError/ValueError`；`tdlas_state._device_provenance` 收窄到 `KeyError/TypeError/ValueError/OSError`；编码重配收窄到 `AttributeError/ValueError/OSError`。产品代码仅剩 6 处刻意宽兜底（HITRAN 降级 ×3、selftest/保真度探针 ×3），均带注释说明
 - 仓库根清理：22 个未跟踪 scratch（`_test_*` / `_plot_*` / `_fix_*`）与 3 个 `.bak` 备份归档到 `tmp/legacy_root/`（仍被 gitignore 覆盖），根目录不再污染
 - 文档同步：README 架构表、TECHNICAL §8「协议层单一实现」
+- **LITES 交互契约真正接线**：`lites_mcp._interaction_block` 此前从未被任何工具调用，`interaction` 恒为 `{}`、`next_required_actions` 恒为空；现 9 个仪器/分析工具统一下发，动作清单改为只依据 LITES **真实产出**的字段（`validation` / `result.x` / `linearity_check` / `assumptions` / `findings`），删掉照抄 TDLAS 的 `warnings` / `normalization` / `fidelity` / `clarify` 永不触发分支
+- `lites_invert` 新增物理校验：`x ∉ (0,1]` 判 `fail`（基线过扣/灵敏度异常/参数不同源），`αL ≥ 0.05` 判 `warn`（线性反演误差 >2.5%）；报出浓度必须同时说明未附不确定度
+- `_block` 的字符串提示统一转为动作 dict，`next_required_actions` 在两种技术下不再混用两种类型；会话写盘失败时降级为「不记账、每次重新下发」，只读安装不再让工具调用失败
+- LITES schema 与实现对齐：`lites_forward` 补 `wn_cm1`（QTF 全波段吸收率模型）、删实现中从未使用的 `species`；`lites_waveform` 补 `gas` / `wn_center` / `scan_span_cm` / `iso`（真实 HITRAN 多线波段，此前功能可达但 AI 无法按 schema 调用）；生成器二次运行 SHA256 不变（幂等）
+- 删除 lites 剩余 TDLAS 复制残留与假功能（器件库读写、物种推荐、激光可达性、三角波说明、`AI_INTERACTION_GUIDE`、`_fidelity_digest`、`adaptive_condition` 等），`lites_mcp.py` 1356 → 909 行；`server-lites/SKILL.md` 参数口径修正（`wn_cm1` 属 `lites_forward`，`lites_waveform` 走 `gas`+`wn_center`）
+- pyflakes 全仓清理：未用 import（`tdlas_mcp` 的 `os`/`time`/`_atomic_write_text`、`tdlas_state` 的 `os`、`alpha_crossval` 的 `cmath` 等）、未用局部变量、无占位符 f-string；剩余仅契约测试按模块属性读取的 4 个 `M.*` 名字（已注释「勿删」）
+- LITES 正演/波形/扫描补线性区与浓度定义域判定：`lites_forward` / `lites_waveform` 此前对 `x=0.5`（αL≈39）照常返回信号、无任何提示；现 `x ∉ (0,1]` 判 `block_conclusion`，`αL ≥ 0.05` 判 `must_disclose`（与 `lites_invert` 同一阈值 0.05）；`lites_sweep` 的 `power_law_index` 偏离 1 超过 0.10 时也要求披露，避免把饱和扫描当线性标定
+- 删除 `lites_device(action="groups")` 空占位（只返回 `{}`、无真实分组）；`lites_resonance` 的输出键 `groups` 改名 `temp_sweep`，避免与器件分组混淆
 
 ### 第二十三轮：撤除全部远程能力，项目只做本地 stdio
 - 用户结论：远程那套（HTTP 入口 + cloudflared 隧道 + Bearer 鉴权）留着不好用，且项目定位就是本地给 AI 客户端直接调，故整体移除

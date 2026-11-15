@@ -16,7 +16,7 @@
 baseline_das: 两列文件 (wavenumber_cm-1, voltage_V) —— 氮气背景不调制的原始信号
 baseline_wms: 两列文件 (time_s, voltage_V) —— 氮气背景调制的原始信号（含 RAM）
 """
-import os, sys, argparse
+import os, sys
 from pathlib import Path
 import numpy as np
 

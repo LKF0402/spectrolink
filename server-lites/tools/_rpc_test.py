@@ -50,7 +50,7 @@ REQS = [
     {"jsonrpc": "2.0", "id": 9, "method": "tools/call",
      "params": {"name": "lites_resonance", "arguments": {"delta_T_K": 2.0}}},
     {"jsonrpc": "2.0", "id": 10, "method": "tools/call",
-     "params": {"name": "lites_device", "arguments": {"action": "groups"}}},
+     "params": {"name": "lites_device", "arguments": {"action": "list"}}},
     {"jsonrpc": "2.0", "id": 11, "method": "tools/call",
      "params": {"name": "lites_noise_budget", "arguments": {}}},
     {"jsonrpc": "2.0", "id": 12, "method": "tools/call",

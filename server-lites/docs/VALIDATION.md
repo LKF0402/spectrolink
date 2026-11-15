@@ -118,27 +118,30 @@ QTF2 → QTF3，几何与 $Q$ 相同 → 测得的 2.920× 增益**只能**归�
 
 ---
 
-### ⚠️ 5.1 未接线能力（诚实声明，勿按设计稿想象）
+### 5.1 契约编排层：已接线范围与仍未覆盖的项
 
-`lites_mcp.py` 中保留了 TDLAS 时代的一整套**契约编排层**，但 **LITES 工具链路从未调用它们**，
-因此下列能力**当前不生效**：
+LITES 的 9 个仪器/分析工具（`forward` / `sweep` / `waveform` / `invert` / `mdl` / `noise_budget` / `resonance` / `compare` / `review`）现已调用 `_interaction_block`，下列能力**生效**：
 
-| 能力 | 实现位置 | 现状 |
-|---|---|---|
-| `severity` 三级（`block_conclusion` / `must_disclose` / `advisory`） | `_interaction_block` | ❌ 未接线 |
-| `interaction.conclusion_allowed` / `blocking_reason` / `stage` | `_interaction_block` | ❌ 未接线 |
-| "同语境不重复下发"的动作抑制 | `_interaction_block` | ❌ 未接线 |
-| α 语境自适应播报（`alpha_report.needs_report`） | `_alpha_report_block` | ❌ 未接线 |
-| etalon 语境自适应播报（`fringe_report`） | `_fringe_report_block` | ❌ 未接线 |
-| 保真度精简块（`fidelity`，转发自台账） | `_fidelity_digest` | ❌ 未接线 |
-| 澄清问题库（`clarify.questions`） | `build_clarify_questions` | ❌ 未接线 |
-| 器件库整机/分组引用（`setup=` / `groups`） | `_resolve_devices` | 部分（`lites_device` 可用） |
+| 能力 | 现状 |
+|---|---|
+| `severity` 三级（`block_conclusion` / `must_disclose` / `advisory`） | ✅ 已接线 |
+| `interaction.conclusion_allowed` / `blocking_reason` / `stage` | ✅ 已接线 |
+| "同语境不重复下发"的动作抑制 | ✅ 已接线（`disclosure_pending` 保留清单） |
+| 默认值逐项披露（`assumptions` → `disclose_defaults`） | ✅ 已接线 |
 
-**当前实际语义**：`next_required_actions` 与 `disclosure_pending` 都是**字符串列表**
-（不是带 `id`/`severity`/`values` 的结构），`interaction` 在多数工具里是 `{}`。
+以下能力**不存在**（不是"未接线"，而是 LITES 没有对应模型/结构，相关 TDLAS 残留已删除）：
 
-**判断"能否下结论"的正确做法**：直接看工具返回的 `verdict` / `warn_count` 等字段本身，
-**不要**去读一个不存在的 `conclusion_allowed`。
+| 能力 | 说明 |
+|---|---|
+| α 语境自适应播报（`alpha_report.needs_report`） | LITES 无 α 报告语境；α 前提按 `assumptions` 披露 |
+| etalon 条纹播报（`fringe_report`） | LITES 无 etalon 模型 |
+| 保真度精简块（`fidelity`） | 保真度台账只由 `lites_guide` 返回，未做成逐工具 digest |
+| 澄清问题库（`clarify.questions`） | LITES 用 `assumptions` + `next_required_actions`，无独立问题库 |
+| 器件库 `groups` / `setup` 引用 | `lites_device` 只支持 `list` / `get` / `build`；QTF 器件库与 TDLAS 设备库是两套 |
+
+**当前实际语义**：`next_required_actions` 是带 `id` / `severity` / `values` 的 dict 列表；`interaction` 在 9 个仪器/分析工具中存在，`guide` / `device` / `selftest` 不返回。
+
+**判断"能否下结论"**：读 `interaction.conclusion_allowed` 与 `blocking_reason`，但它只覆盖已建模判据（`validation`、`result.x`、`linearity_check`、`findings`、`assumptions`），不等于物理正确性证明。
 
 **两种收尾方式**（择一，勿长期悬置）：
 - **(a) 接线**：把这套编排层接回 LITES 工具链路，升级契约语义（收益大，工作量中等）

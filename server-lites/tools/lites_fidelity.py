@@ -30,7 +30,6 @@
 from __future__ import annotations
 
 import contextlib
-import inspect
 import io
 import json
 import sys
@@ -47,7 +46,6 @@ from spectrolink_core.fidelity import (        # noqa: E402
     fidelity_summary as core_fidelity_summary,
 )
 
-import lites_physics as lph  # noqa: E402
 
 for _s in (sys.stdout, sys.stderr):
     try:

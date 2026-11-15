@@ -37,7 +37,6 @@
 from __future__ import annotations
 
 import io
-import json
 import math
 import os
 import sys
@@ -117,13 +116,32 @@ def _sanitize_paths(s: str) -> str:
 
 
 def _block(assumptions=None, next_actions=None, disclosure=None, interaction=None):
-    """构造统一的三段式契约块（TDLAS 工具集沿用同一约定）。"""
+    """构造统一的三段式契约块（TDLAS 工具集沿用同一约定）。
+
+    `next_actions` 里的字符串提示在这里统一转成动作 dict（与 MCP 层的
+    `next_required_actions` 同一形状），避免同一字段在不同技术下混用两种类型。
+    """
+    _acts = []
+    for _i, _a in enumerate(next_actions or [], 1):
+        if isinstance(_a, str):
+            _acts.append({"id": f"impl_note_{_i}", "severity": "must_disclose",
+                          "action": _a, "evidence_fields": [],
+                          "values": None, "template": _a})
+        elif isinstance(_a, dict):
+            _acts.append(_a)
     return {
         "assumptions": assumptions or [],
-        "next_required_actions": next_actions or [],
+        "next_required_actions": _acts,
         "disclosure_pending": disclosure or [],
         "interaction": interaction or {},
     }
+
+
+def _validation(checks):
+    """由逐项检查汇总 validation 块（overall = fail > warn > pass）。"""
+    sts = [str(c.get("status")) for c in checks]
+    overall = "fail" if "fail" in sts else ("warn" if "warn" in sts else "pass")
+    return {"overall": overall, "checks": checks}
 
 
 #: 物理常数（与 HITRAN 口径一致）
@@ -163,7 +181,7 @@ def peak_alpha(s_line: float, T: float, P: float, x: float,
 def lites_forward(device=lph.DEFAULT_DEVICE, power_mW=None, x=None,
                   line_strength=None, L_gas_cm=None, T=296.0, P=1.01325,
                   gamma_L=0.06, f_m=None, mod_depth_cm1=None,
-                  f0_shift_ppm=0.0, eta_spurious=None, species=None,
+                  f0_shift_ppm=0.0, eta_spurious=None,
                   wn_cm1=None):
     """预测 LITES 的 2f 峰值电压，并**显式分解**"线外本底"与"气体贡献"。
 
@@ -404,11 +422,10 @@ def _quad_demod_profile(alpha_prof, nu, hwhm, mod_depth_cm1,
     单洛伦兹假设抹掉，导致 2f 信号几乎清零、峰位偏移。修复后与 TDLAS
     数值锁相同口径，峰形/峰位一致。
     """
-    n = len(alpha_prof)
     k = np.arange(n_periods * spp)
     ph = 2.0 * np.pi * k / spp
     pr = math.radians(float(ref_phase_deg))
-    c1 = np.cos(ph); s1 = np.sin(ph)
+    c1 = np.cos(ph)
     c2 = np.cos(2.0 * ph + pr); s2 = np.sin(2.0 * ph + pr)
     nu_t = nu[:, None] + mod_depth_cm1 * c1[None, :]
     # 沿完整 α(ν) 插值采样（clamp 到扫描边界）：保留邻近线贡献，与 TDLAS 同口径
@@ -533,7 +550,9 @@ def lites_waveform(device=lph.DEFAULT_DEVICE, power_mW=None, x=None,
                     "peak_to_peak_V": float(np.ptp(v2f)),
                     "noise_sigma_V": float(sigma_V),
                     "SNR": snr, "MDL_x": mdl_x,
-                    "MDL_ppm": (mdl_x * 1e6) if mdl_x else None},
+                    "MDL_ppm": (mdl_x * 1e6) if mdl_x else None,
+                    "alphaL": alpha * L_gas_cm,
+                    "absorbance": 1.0 - math.exp(-alpha * L_gas_cm)},
         "notes": [
             "2f 为正交解调幅值 R$_{2f}$=√(X²+Y²)（与参考相位无关，工程锁相输出）；"
             "X/Y/X′ 分量保留于波形字段。",
@@ -620,17 +639,12 @@ def _plot_waveform(d, nu, alpha_prof, demod, sigma, cond,
     n = len(nu)
     t_sc = np.linspace(0.0, T_scan, n)
 
-    X2f = np.asarray(demod["X"]); Y2f = np.asarray(demod["Y"])
     Xp = np.asarray(demod["Xp"])
     R2f = np.asarray(demod["R2f"])
-    phi = float(demod["phi"])
     v_base = float(demod["v_base"]); v_delta = float(demod["v_delta"])
     xmax = float(np.max(R2f))
     k_cal = v_delta / max(xmax, 1e-30)
-    X2f_c = X2f * k_cal; Y2f_c = Y2f * k_cal; Xp_c = Xp * k_cal
     R2f_c = R2f * k_cal
-    if v2f_n is None:
-        v2f_n = None
 
     # ── ① 音叉电信号：DC 透射包络（真实比例）────────────────────
     # T(ν) = exp(−α(ν)·L)，吸收凹陷 = 1−exp(−αL)（真实量级，不放大示意）
@@ -822,6 +836,19 @@ def lites_invert(v_2f_measured_V, device=lph.DEFAULT_DEVICE, line_strength=None,
         raise ValueError("灵敏度非正，请检查器件/线强/光程参数")
 
     x = v_delta / s_v_per_x
+    _alpha = peak_alpha(line_strength, T, P, x, gamma_L)
+    _alphaL = _alpha * L_gas_cm
+    _x_ok = bool(np.isfinite(x) and 0.0 < x <= 1.0)
+    _checks = [
+        {"check": "x_in_unit_interval", "status": "pass" if _x_ok else "fail",
+         "value": x,
+         "detail": "摩尔分数须在 (0,1]；越界通常意味着基线过扣、灵敏度符号不对或"
+                   "线强/光程与实际光路不同源。"},
+        {"check": "weak_absorption_linear", "status": "pass" if _alphaL < 0.05 else "warn",
+         "value": _alphaL,
+         "detail": "αL < 0.05 时线性反演误差 <2.5%；超出须改用 lites_forward 迭代"
+                   "或稀释后重测。"},
+    ]
 
     return {
         "device": device,
@@ -831,12 +858,12 @@ def lites_invert(v_2f_measured_V, device=lph.DEFAULT_DEVICE, line_strength=None,
             "x": x, "x_ppm": x * 1e6, "x_ppb": x * 1e9,
             "V_delta_used_V": v_delta,
             "sensitivity_V_per_x": s_v_per_x,
-            "alpha_peak_cm-1": peak_alpha(line_strength, T, P, x, gamma_L),
+            "alpha_peak_cm-1": _alpha,
         },
+        "validation": _validation(_checks),
         "linearity_check": {
-            "alphaL": peak_alpha(line_strength, T, P, x, gamma_L) * L_gas_cm,
-            "in_linear_regime": bool(
-                peak_alpha(line_strength, T, P, x, gamma_L) * L_gas_cm < 0.05),
+            "alphaL": _alphaL,
+            "in_linear_regime": bool(_alphaL < 0.05),
             "note": "αL < 0.05 时线性反演误差 <2.5%；"
                     "超出则需用 lites_forward 迭代求解（非线性）",
         },
@@ -974,7 +1001,6 @@ def lites_noise_budget(device=lph.DEFAULT_DEVICE, bandwidth_Hz=100.0,
                        v_rms_1f=float(v_rms_1f),
                        resp_V_per_C=float(resp_V_per_C))
     # 器件库已裁剪为单默认器件（qtf-commercial-decapped），跨器件噪声对照不再提供。
-    inst = {}
 
     out = {
         "device": device, "bandwidth_Hz": float(bandwidth_Hz),
@@ -1035,16 +1061,7 @@ def lites_device(action="list", key=None, overrides=None):
       · "list"    —— 列出所有器件及其关键参数
       · "get"     —— 取单个器件详情（含反解增益 g 与各派生量）
       · "build"   —— 用 overrides 构造一个临时器件（不写入库）
-      · "groups"  —— 列出标定分组（用于跨器件对比）
     """
-    if action == "groups":
-        # 器件库已裁剪为单默认器件（qtf-commercial-decapped），无跨器件标定分组。
-        # 保留 action 占位：用户自定义器件后可在此扩展分组校验。
-        return {"groups": {},
-                "note": "当前器件库仅内置 qtf-commercial-decapped，无标定分组；"
-                        "如需多器件对比请先用 action='build' 构造临时器件。",
-                **_block()}
-
     if action == "list":
         rows = []
         for k, d in lph.DEVICE_LIBRARY.items():
@@ -1138,7 +1155,7 @@ def lites_device(action="list", key=None, overrides=None):
             "若 cal_* 缺失则使用默认值（结果仅供量级参考）。"
         ])}
 
-    raise ValueError(f"未知 action {action!r}；可选 list/get/build/groups")
+    raise ValueError(f"未知 action {action!r}；可选 list/get/build")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1170,13 +1187,13 @@ def lites_resonance(device=lph.DEFAULT_DEVICE, delta_T_K=1.0, assume_f0=None,
         "f_m_needed_Hz": f0_true / 2.0,
         "loss_db": drift["loss_db"],
         "residual_frac": drift["residual_frac"],
-        "groups": {},
+        "temp_sweep": {},
     }
 
     for dT in (0.1, 0.5, 1.0, 2.0, 5.0, 10.0):
         f0t = lph.f0_drift(d.f0, dT, d.tc_ppm_per_K)
         L = lph.detuning_loss(f0t, d.f0, d.q)
-        out["groups"][f"{dT}K"] = {"f0_shift_Hz": f0t - d.f0,
+        out["temp_sweep"][f"{dT}K"] = {"f0_shift_Hz": f0t - d.f0,
                                    "loss_db": L["loss_db"]}
 
     if freq_error_pct is not None:
@@ -1397,7 +1414,6 @@ def lites_review(device=lph.DEFAULT_DEVICE, power_mW=None, x=None, L_gas_cm=None
             f"{'两者接近，无需下移' if opt['gain_vs_f0half'] < 1.1 else '可考虑下移 f_m'}")
 
     # 3. 共振跟踪
-    tol = lph.detuning_loss(d.f0 * 1.001, d.f0, d.q)["loss_db"]
     if d.bw_3dB < 20:
         add("warn", "共振跟踪",
             f"3dB 带宽仅 {d.bw_3dB:.2f} Hz（Q={d.q:.0f}，f0={d.f0:.0f} Hz）。"
@@ -1550,7 +1566,7 @@ def lites_guide(topic=None):
 
 def lites_selftest():
     """运行物理内核自检（29 项），并把每一项的通过/失败原样返回。"""
-    with _quiet() as g:
+    with _quiet():
         lines = lph.selftest()
     txt = "\n".join(lines)
     n_pass = txt.count("[PASS]")

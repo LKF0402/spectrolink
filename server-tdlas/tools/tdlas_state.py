@@ -7,8 +7,6 @@
 from __future__ import annotations
 
 import json
-import math
-import os
 import sys
 from pathlib import Path
 
@@ -20,6 +18,7 @@ for _p in (_ROOT, _SRV):
 
 import tdlas_sim as ts  # noqa: E402
 from spectrolink_core.jsonio import atomic_write_text as _atomic_write_text  # noqa: E402
+from spectrolink_core.report_blocks import validate_device_params  # noqa: E402
 
 from tdlas_constants import (          # noqa: E402
     PARAM_ACQ_GUIDE,
@@ -52,27 +51,8 @@ def _get_session(session_id="default"):
 
 
 def _validate_device_entry(entry):
-    """校验一组设备参数；返回错误说明（None = 通过）。"""
-    for k, v in entry.items():
-        rule = _DEVICE_RULES.get(k)
-        try:
-            fv = float(v)
-        except (TypeError, ValueError):
-            return f"参数 {k}={v!r} 不是数值"
-        if not math.isfinite(fv):
-            return f"参数 {k}={v!r} 不是有限数值"
-        if rule is None:
-            continue
-        lo, hi, lo_incl, kind = rule
-        if kind == "int" and abs(fv - round(fv)) > 1e-9:
-            return f"参数 {k}={fv:g} 必须为整数"
-        if kind == "nonzero" and fv == 0.0:
-            return f"参数 {k} 不能为 0（否则波数不随注入电流变化，无法反算扫描中心）"
-        if lo is not None and (fv < lo or (fv == lo and not lo_incl)):
-            return f"参数 {k}={fv:g} 必须 {'≥' if lo_incl else '>'} {lo:g}"
-        if hi is not None and fv > hi:
-            return f"参数 {k}={fv:g} 必须 ≤ {hi:g}"
-    return None
+    """校验一组设备参数；返回错误说明（None = 通过）。规则与实现见 core。"""
+    return validate_device_params(entry, _DEVICE_RULES)
 
 
 def _load_devices():

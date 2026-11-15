@@ -17,14 +17,11 @@ from __future__ import annotations
 
 import contextlib
 import datetime as _dt
-import hashlib
 import io
 import json
 import math
-import os
 import re
 import sys
-import time
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent.parent    # 仓库根（SpectroLink monorepo）
@@ -49,7 +46,6 @@ _HOME = str(Path.home())
 _WS_ROOT = str(_ROOT.parent)
 
 from tdlas_state import (          # noqa: E402 状态层
-    _atomic_write_text,
     _load_sessions,
     _save_sessions,
     _get_session,
@@ -61,11 +57,11 @@ from tdlas_state import (          # noqa: E402 状态层
     _suggest_setup_name,
     _device_setup_guide,
     _device_provenance,
-    _SESSION_FILE,          # 状态文件路径：唯一定义处是 tdlas_state，这里只做兼容引用
-    _DEVICE_FILE,
+    _SESSION_FILE,          # 契约测试 monkeypatch M._SESSION_FILE；唯一定义处是 tdlas_state，勿删
+    _DEVICE_FILE,           # 同上（契约测试 monkeypatch M._DEVICE_FILE）
 )
 
-from tdlas_constants import (          # noqa: E402 纯数据常量表
+from tdlas_constants import (          # noqa: E402 纯数据常量表（部分名字仅供契约测试取 M.*）
     AI_INTERACTION_GUIDE,
     CLARIFY_QUESTIONS,
     CONTRACT_BLOCKS,                    # 契约自检按 M.CONTRACT_BLOCKS 取，勿删
@@ -90,6 +86,9 @@ from tdlas_constants import (          # noqa: E402 纯数据常量表
     _X_LIST_MAX,
 )
 
+from spectrolink_core import report_blocks as _report_blocks         # noqa: E402
+from spectrolink_core.interaction import (                      # noqa: E402
+    ev_ok as _ev_ok, interaction_block as _interaction_block_core)
 from spectrolink_core.mcp_runtime import (                      # noqa: E402
     make_handle_request, serve_stdio, validate_args)
 from spectrolink_core.sanitize import make_path_sanitizer       # noqa: E402
@@ -108,71 +107,15 @@ _sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
 
 
 def _alpha_report_block(alpha_context, species, session_id="default"):
-    """自适应决定是否需在回答中显式播报 α 峰值的计算语境。
-
-    规则（任一命中 → needs_report=True）：
-      ① 本会话首次给出 α 峰值（无既往播报记录）；
-      ② 语境变化：物种 或 (T, P, step, wingHW, 窗口) 与上次已播报的不同。
-    返回 None 表示本次结果不含 α 语境（该工具未报 α）。
-    """
-    if not alpha_context:
-        return None
-    snapshot = {"species": str(species).upper(),
-                **{k: alpha_context.get(k) for k in _ALPHA_CTX_FIELDS},
-                "window_cm-1": alpha_context.get("window_cm-1")}
-    sessions = _load_sessions()
-    sess = sessions.get(session_id, {"confirmed": {}, "pending": [], "stage": "clarify"})
-    prev = sess.get("last_alpha_report")
-    reasons = []
-    if prev is None:
-        reasons.append("本会话首次给出 α 峰值")
-    elif prev != snapshot:
-        reasons.append("α 计算语境与上次不同")
-    needs = bool(reasons)
-    if needs:
-        sess["last_alpha_report"] = snapshot
-        sessions[session_id] = sess
-        _save_sessions(sessions)
-    return {"alpha_peak_context": alpha_context,
-            "needs_report": needs,
-            "report_reason": "；".join(reasons) if reasons else "语境未变且已播报过，无需重复",
-            "report_rule": "needs_report=True 时：给出 α 峰值**必须同时**列出 T(K)、P(atm)、"
-                           "网格步长 step(cm⁻¹)、翼截断 wingHW(cm⁻¹)、波数窗口(cm⁻¹)——缺一不可；"
-                           "needs_report=False 时数值口径不变，可省略以保持简洁。"}
+    """自适应决定是否需播报 α 峰值语境（判定与措辞见 core，本处只注入会话读写）。"""
+    return _report_blocks.alpha_report_block(
+        alpha_context, species, session_id, _load_sessions, _save_sessions, _ALPHA_CTX_FIELDS)
 
 
 def _fringe_report_block(fringe_meta, session_id="default"):
-    """自适应决定是否需播报 etalon 条纹的影响评估（首次 或 语境变化）。
-
-    未启用条纹模型时返回固定说明且**不写会话**（默认关 → 不打扰用户）。
-    """
-    if not (fringe_meta or {}).get("enabled"):
-        return {"enabled": False, "needs_report": False,
-                "note": "未启用 etalon 条纹模型（默认理想仿真）"}
-    fsr = float(fringe_meta["fsr_cm-1"])
-    ctr = float(fringe_meta["contrast"])
-    snapshot = {"fsr_cm-1": fsr, "contrast": ctr,
-                "drift_frac": float(fringe_meta.get("drift_frac") or 0.0)}
-    sessions = _load_sessions()
-    sess = sessions.get(session_id, {"confirmed": {}, "pending": [], "stage": "clarify"})
-    prev = sess.get("last_fringe_report")
-    reasons = []
-    if prev is None:
-        reasons.append("本会话首次启用 etalon 条纹")
-    elif prev != snapshot:
-        reasons.append("etalon 条纹语境与上次不同")
-    needs = bool(reasons)
-    if needs:
-        sess["last_fringe_report"] = snapshot
-        sessions[session_id] = sess
-        _save_sessions(sessions)
-    return {"enabled": True, "fsr_cm-1": fsr, "contrast": ctr,
-            "fringe_context": fringe_meta,
-            "needs_report": needs,
-            "report_reason": "；".join(reasons) if reasons else "语境未变且已播报过，无需重复",
-            "report_rule": "needs_report=True 时须向用户说明：① 条纹 FSR 与吸收线宽的关系"
-                           "（决定是否会在 2f 上伪造吸收峰）；② 确定性条纹会被背景扣除消除、"
-                           "只有漂移残留；③ 压不掉条纹时该做的物理措施（窗片楔化 / AR 镀膜 / 扫频平均）。"}
+    """自适应决定是否需播报 etalon 条纹影响评估（判定与措辞见 core）。"""
+    return _report_blocks.fringe_report_block(
+        fringe_meta, session_id, _load_sessions, _save_sessions)
 
 
 # ══════════════ AI 交互契约：结构化动作（可校验 / 按需下发） ══════════════
@@ -190,21 +133,6 @@ def _fringe_report_block(fringe_meta, session_id="default"):
 # 往返不划算；见 docs/VALIDATION.md §8）。
 
 
-def _ev_ok(out, path):
-    """evidence_fields 路径解析：`a.b` 逐层取值；任一层缺失即 False。
-
-    为什么要它：动作必须只指向**本次返回里真实存在**的字段，否则 AI 按 id 执行时会
-    找不到数据（这正是要消灭的那类漂移）。契约测试另有一条断言兜底（见 contract_check）。
-    """
-    cur = out
-    for part in str(path).split("."):
-        if isinstance(cur, dict) and part in cur:
-            cur = cur[part]
-        else:
-            return False
-    return True
-
-
 def _fidelity_digest():
     """随结果下发的**精简**保真度声明（真源仍是 tools/tdlas_fidelity.py，此处不复制内容）。"""
     full = _fidelity_summary()
@@ -219,17 +147,8 @@ def _fidelity_digest():
 
 
 def _condition_values(out):
-    """取值本次**实际生效**的工况参数（T/P/x/L），兼容两种回显形状。
-
-    仪器链（wms/das）给 `conditions` 块；分析链（invert 等）是平铺的 T_K/P_atm/path_cm。
-    `assumptions` 只说"哪些用了默认"，不给数值 —— 缺了本函数，动作就只能要求 AI
-    "说明用了默认值"却报不出数值。
-    """
-    c = out.get("conditions") or {}
-    return {"T": c.get("T_K", out.get("T_K")),
-            "P": c.get("P_atm", out.get("P_atm")),
-            "x": c.get("x", out.get("x_ref", out.get("x"))),
-            "L_cm": c.get("L_cm", out.get("path_cm"))}
+    """取值本次实际生效的工况参数（T/P/x/L），兼容两种回显形状（实现见 core）。"""
+    return _report_blocks.condition_values(out)
 
 
 def _packing_state(out=None):
@@ -289,7 +208,7 @@ def _packing_state(out=None):
                 "ask_user": ("你已经建了设备库，但还没打包成整机配置。"
                              "打包后只需一个 `setup=名字` 就能一键套用全部硬件参数，"
                              "不必每次重填。" +
-                             (f"目前还缺："
+                             ("目前还缺："
                               + "、".join(m["cn"] for m in missing_cn) + "。" if missing else "")),
                 "how": "tdlas_device action=save_setup name=... laser=... pd=... daq=... optics=..."}
     if not dflt:
@@ -313,7 +232,6 @@ def build_next_actions(out):
     acts = []
     val = out.get("validation") or {}
     overall = val.get("overall")
-    title = str(out.get("species") or "").upper() or "该物种"
 
     def add(_id, sev, action, ev, values=None, template=None):
         if not all(_ev_ok(out, p) for p in ev):        # 数据不在 → 不生成（不指向空气）
@@ -430,14 +348,6 @@ def build_next_actions(out):
     return sorted(acts, key=lambda a: _SEV_ORDER.get(a["severity"], 9))
 
 
-def _action_sig(action):
-    """动作的"语境指纹"：只取与数值有关的部分，用于判断是否需要重新下发。"""
-    payload = {"id": action["id"], "values": action.get("values"),
-               "evidence_fields": action.get("evidence_fields")}
-    return hashlib.md5(json.dumps(payload, sort_keys=True, ensure_ascii=False,
-                                  default=str).encode("utf-8")).hexdigest()[:10]
-
-
 def _figure_check(png_path, r, multi=None):
     """出图自检：机器检查图片质量，AI 不用读图也能知道有没有问题。
 
@@ -513,73 +423,9 @@ def _figure_check(png_path, r, multi=None):
 
 
 def _interaction_block(out, tool, session_id="default"):
-    """把 build_next_actions 的结果做成**按需下发**的交互契约块。
-
-    返回 (interaction, next_required_actions)。stage 的语义（写死在这里，别再解释成别的）：
-      · clarify  —— conclusion_allowed=false：校验 fail / 扫描含暗区 / 反演越界，
-                    即"这个数本身不可用"，不得据此给定量结论
-      · produced —— 结论可给，但本轮仍有**新**的必须披露项未下发
-      · verified —— 结论可给，且本会话该说的都已下发过（本轮无新项）
-    ⚠ `verified` 只表示"要求已全部下发过"，**不代表模型已照做**（服务器看不到最终措辞）。
-    ⚠ `conclusion_allowed` **故意不把"缺参数未确认"算作阻断**：缺省参数是每个新会话的默认
-      状态（默认工况下 assumptions 有 35 项、clarify 题库有 36 问），若据此阻断则该布尔恒为
-      false、随即失去信息量。缺参数走 must_disclose（结论可给 + 必须标注），与项目既有口径
-      （confirm_note："保留默认时须在结论中明确注明"）一致。
-    """
-    acts = build_next_actions(out)
-    sessions = _load_sessions()
-    sess = sessions.get(session_id, {"confirmed": {}, "pending": [], "stage": "clarify"})
-    sent = dict(sess.get("interaction_sent") or {})
-    fresh, already, changed = [], [], False
-    for a in acts:
-        # ⚠ 按 **工具+动作** 记账：review 内部会先跑一次 wms，若只按动作 id 记账，
-        # 两个工具写同一份 map 会互相抹掉对方的"已下发"记录（实测序列会来回重复下发）。
-        key = f"{tool}:{a['id']}"
-        sig = _action_sig(a)
-        if sent.get(key) == sig:
-            already.append(a["id"])
-        else:
-            fresh.append(a)
-            sent[key] = sig
-            changed = True
-    keep = {f"{tool}:{a['id']}" for a in acts}            # 剪掉已不适用的条目
-    pruned = {k: v for k, v in sent.items() if k in keep}
-    if pruned != sent:
-        changed = True
-    if changed:
-        sess["interaction_sent"] = pruned
-        sessions[session_id] = sess
-        _save_sessions(sessions)
-
-    val = out.get("validation") or {}
-    physics_ok = val.get("overall") != "fail"
-    blockers = [a for a in acts if a["severity"] == _SEV_BLOCK]      # 只剩"这个数不可用"类
-    result_usable = not blockers
-    allowed = bool(physics_ok and result_usable)
-    has_result = ("results" in out) or ("validation" in out) or _ev_ok(out, "mole_frac")
-    if not allowed:
-        stage = "clarify"
-    elif has_result and not fresh:
-        stage = "verified"
-    else:
-        stage = "produced"
-    reason = None
-    if not allowed:
-        _parts = []
-        if not physics_ok:
-            _fails = [c.get("check") for c in (val.get("checks") or []) if c.get("status") == "fail"]
-            _parts.append("物理校验未通过（validation.overall=fail）"
-                          + (f"：{'、'.join(str(f) for f in _fails)}" if _fails else ""))
-        _parts += [a["action"] for a in blockers]
-        reason = "；".join(_parts) or "结果不可用"
-    interaction = {"tool": tool, "stage": stage,
-                   "physics_ok": bool(physics_ok), "result_usable": bool(result_usable),
-                   "conclusion_allowed": allowed, "blocking_reason": reason,
-                   "disclosure_pending": already,
-                   "rule": "conclusion_allowed=false（见 blocking_reason）时不得给出定量结论；"
-                           "next_required_actions 里 must_disclose 项须在同一回答里说明；"
-                           "disclosure_pending 是本会话已下发过的项（不重复发大 payload，仍须覆盖）。"}
-    return interaction, fresh
+    """按需下发交互契约块（记账/去重/stage 语义见 core，本处注入本技术的动作清单）。"""
+    return _interaction_block_core(out, tool, session_id, _load_sessions, _save_sessions,
+                                   build_next_actions, _SEV_BLOCK)
 
 
 # ══════════════════ 设备库（仪器统一管理）══════════════════
@@ -625,13 +471,8 @@ def _resolve_conditions(T, P, x, L_cm, session_id="default", x_default=1e-3, L_d
 
 
 def _species_defaults(species):
-    """按物种返回推荐浓度 x_typ 与光程 L_cm（来自 SPECIES_PROFILES，缺省回退 1e-3 / 50 cm）。
-
-    强吸收分子（如 CH4@3.3μm）默认浓度应更低，否则 αL 过大进入饱和区、2f/1f 非线性。
-    回退值取 _SCENE_DEFAULTS 的光程，保证与仪器链一致（见 _resolve_conditions 的说明）。
-    """
-    prof = SPECIES_PROFILES.get(str(species or "").strip().upper(), {})
-    return prof.get("x_typ", 1e-3), prof.get("L_cm", _SCENE_DEFAULTS["L_cm"])
+    """按物种返回推荐浓度 x_typ 与光程 L_cm（表在 constants，回退口径在 core）。"""
+    return _report_blocks.species_defaults(species, SPECIES_PROFILES, _SCENE_DEFAULTS["L_cm"])
 
 
 # 技术知识：随工具返回，供 AI 向用户解释真实实验要点（而非只给数字）
@@ -696,7 +537,7 @@ def generate_next_suggestions(results, conditions):
     if not suggestions:
         suggestions.append({
             "action": "try_other_concentrations",
-            "message": f"当前工况正常。可以试试不同浓度，看线性区间（建议 5 个浓度点）。",
+            "message": "当前工况正常。可以试试不同浓度，看线性区间（建议 5 个浓度点）。",
             "expected_gain": "得到标定曲线 R²"
         })
 
@@ -1089,7 +930,7 @@ def t_invert(peak_2f1f, species="H2O", wn0=7185.596, T=None, P=None, L=None,
                 ls_fit = _TF.fit_concentration_ls(_meas, _ref / float(x_ref))
                 ls_fit["k_source"] = "调用方提供的 ref_spectrum（同工况）"
             else:
-                with _quiet() as _g9:
+                with _quiet():
                     _rr = ts.simulate_wms_instrument(str(species), wn_center=float(wn0),
                                                      T=float(T), P=float(P), x=float(x_ref),
                                                      L_cm=float(L), seed=0)

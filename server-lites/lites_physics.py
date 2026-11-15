@@ -1157,7 +1157,7 @@ def selftest() -> list[str]:
                f"{nf['sigma_total_V']*1e6:.3f} μV "
                f"(1/f {nf['pink_V']*1e6:.3f} μV, 白 {nf['white_V']*1e6:.3f} μV, "
                f"主导={nf['dominant']})")
-    log.append(f"[INFO] 文献实测噪声对照: C2H2 9.16 μV / CH4 112 μV "
+    log.append("[INFO] 文献实测噪声对照: C2H2 9.16 μV / CH4 112 μV "
                f"—— 与模型自估同量级即视为口径自洽；量级差 >10× 应检查 "
                f"V_1f_rms 与 BW 的取值")
 

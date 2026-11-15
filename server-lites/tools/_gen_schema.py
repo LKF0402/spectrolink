@@ -68,7 +68,8 @@ TOOLS = [
           "mod_depth_cm1": {**X, "description": "波长调制深度 cm⁻¹，默认 0.3"},
           "f0_shift_ppm": {**X, "description": "f0 相对标称值的偏移 ppm（模拟温漂/装配误差）"},
           "eta_spurious": {**X, "description": "寄生吸收（窗口污染/散射）附加的 η；不填=0"},
-          "species": {"type": "string", "description": "物种名覆盖，默认取器件所属物种"}}),
+          "wn_cm1": {**X, "description": "目标波数 cm⁻¹；给出即启用 QTF 全波段吸收率模型"
+                                         "（η_dev 按波长缩放，基准=器件标定波长）"}}),
 
     tool("lites_sweep",
          "【单变量扫描】对某一参数扫值并自动拟合幂律指数。"
@@ -99,7 +100,12 @@ TOOLS = [
           "seed": {"type": "integer", "description": "噪声随机种子"},
           "save_png": {"type": "boolean", "description": "是否出图，默认 true"},
           "out_path": {"type": "string",
-                       "description": "PNG 输出路径；缺省 = docs/assets/lites_waveform.png"}}),
+                       "description": "PNG 输出路径；缺省 = docs/assets/lites_waveform.png"},
+          "gas": {"type": "string", "description": "HITRAN 分子式（如 CH4 / H2O）；给出则用真实"
+                                                   "多线剖面替代单线，此时必须同时给 wn_center"},
+          "wn_center": {**X, "description": "真实波段中心波数 cm⁻¹（gas 模式必填）"},
+          "scan_span_cm": {**X, "description": "慢扫半宽 cm⁻¹，默认 3.0"},
+          "iso": {"type": "string", "description": "HITRAN 同位素选择，默认 \"all\""}}),
 
     tool("lites_invert",
          "【浓度反演】由实测 2f 幅值反推摩尔分数。"
@@ -140,10 +146,10 @@ TOOLS = [
 
     tool("lites_device",
          "【器件库】查/建器件。内置器件均来自文献实测锚点（f0、Q、V_2f、噪声、几何）。"
-         "action='list' 列全部；'get' 取单个详情；'groups' 看标定分组（同组内可比）；"
+         "action='list' 列全部；'get' 取单个详情；"
          "'build' 由参数现场构造一个虚拟器件做假设性推演。",
-         {"action": {"type": "string", "enum": ["list", "get", "groups", "build"],
-                     "description": "list / get / groups / build"},
+         {"action": {"type": "string", "enum": ["list", "get", "build"],
+                     "description": "list / get / build"},
           "key": {"type": "string",
                   "description": "get/build 时的器件键名（build 时为新建的名字）"},
           "overrides": {"type": "object",
