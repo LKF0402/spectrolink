@@ -168,7 +168,7 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 | **DOAS** | t_doas_forward | UV-Vis 截面正演（慢变背景多项式分离 + 联合最小二乘） |
 | | t_doas_calibrate / t_doas_invert | 标定曲线 / 实测谱反演 |
 
-> NDIR / CRDS / FTIR / DOAS 还各带一个 `*_selftest`（`t_ndir_selftest` 等），用于改动后一键回归。
+> NDIR / CRDS / FTIR / DOAS 还各带一个自检工具：`t_ndir_selftest` / `t_crds_selftest` / `t_ftir_selftest` / `t_doas_selftest`，用于改动后一键回归。
 
 </details>
 
