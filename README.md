@@ -178,7 +178,9 @@ python server-doas/tools/doas_mcp.py --selftest     # DOAS 服务器自检（离
 ```bash
 python server-tdlas/tools/tdlas_mcp.py --http --host 0.0.0.0 --port 8000 --token <鉴权密钥>
 python server-tdlas/tools/remote_link.py   # 公网隧道（cloudflared）
-# 其余技术：ndir=8005 / crds=8002 / ftir=8003 / doas=8004（各 tools/<tech>_mcp.py --http 同参）
+# 其余技术：lites=8001 / crds=8002 / ftir=8003 / doas=8004 / ndir=8005
+# 六个 server 都有 tools/remote_link.py（同一份实现 spectrolink_core/tunnel.py），
+# 端口/密钥用 <TECH>_PORT / <TECH>_TOKEN 覆盖
 ```
 
 ## 📚 文档
