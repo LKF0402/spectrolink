@@ -1,4 +1,4 @@
-﻿---
+---
 name: spectrolink
 description: SpectroLink —— 多技术光谱传感仿真 MCP 总入口。触发词：TDLAS、WMS、波长调制、直接吸收、DAS、二次谐波、2f/1f、数字锁相、谐波检测、浓度反演、检测限、LOD、调制系数 m、LITES、光致热弹、石英音叉、QTF、CRDS、腔衰荡、ring-down、NDIR、非分散红外、FTIR、傅里叶变换红外、DOAS、差分吸收、紫外可见宽带光谱。用户要求光谱仿真、气体浓度仿真、检测限计算时必须使用本 Skill。
 ---

@@ -1,4 +1,4 @@
-﻿---
+---
 name: spectrolink-lites
 description: SpectroLink 子服务器 server-lites（L2 参考，AI 自动读取，非独立安装）。LITES（光致热弹光谱 / Light-Induced Thermoelastic Spectroscopy）仿真。触发词：LITES、光致热弹、热弹光谱、石英音叉、QTF、音叉晶振、去壳音叉、裸音叉、32.768 kHz、压电探测、2f 解调、锁相、能量积累时间、MDL、器件吸收率。
 ---
