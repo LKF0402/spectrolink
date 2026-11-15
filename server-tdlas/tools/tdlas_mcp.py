@@ -711,6 +711,20 @@ def _resolve_devices(setup=None, laser=None, pd=None, daq=None, optics=None):
         if not name:
             continue
         params = dev.get(k, {}).get(str(name))
+        if params is None and k == "laser":
+            # 允许直接引用内置 demo 预设（SKILL.md §C+ 承诺可用）：只取该类型允许键，
+            # source 标 ai —— 演示参数不是真实器件，避免被当成 datasheet。
+            _p = (getattr(ts, "PRESET_LASERS", {}) or {}).get(str(name))
+            if _p is not None:
+                params = {kk: _p[kk] for kk in _DEVICE_TYPES["laser"] if _p.get(kk) is not None}
+                params["source"] = "ai"
+                params["source_note"] = "内置 demo 预设（非真实器件）"
+        if isinstance(params, dict) and isinstance(params.get("params"), dict):
+            # 兼容嵌套历史格式 {name, source, params:{...}, note}：
+            # 外层只把 provenance 并入参数域，name/note 一律不进（否则被当成非数值参数）
+            _outer = {kk: params[kk] for kk in ("source", "source_note", "updated", "fields")
+                      if params.get(kk) is not None}
+            params = {**params["params"], **_outer}
         if params is None:
             _keys = _DEVICE_SALIENT_KEYS.get(k, [])
             _need = "、".join(

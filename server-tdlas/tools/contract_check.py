@@ -51,6 +51,12 @@ for _s in (sys.stdout, sys.stderr):
 import tdlas_sim as ts                      # noqa: E402
 import tdlas_mcp as M                       # noqa: E402
 
+# ★ 契约自检必须自包含：不读用户真实设备库/会话文件。
+#   否则 CI（干净环境）通过、用户本地（有历史设备）假失败 —— 同一份代码两种结果。
+_ISOLATED_DIR = Path(tempfile.mkdtemp(prefix="spectrolink_contract_"))
+M._DEVICE_FILE = _ISOLATED_DIR / ".tdlas_devices.json"
+M._SESSION_FILE = _ISOLATED_DIR / ".tdlas_session.json"
+
 _OK = 0
 _BAD = 0
 
