@@ -58,6 +58,9 @@ _link*.log
 # 本地留存文档（不推远端）
 USAGE.md
 
+# 例外：README 直接链接的使用指南要随仓库发布
+!USAGE.md
+
 # 临时测试脚本（不推远端）
 _fix_*.py
 
