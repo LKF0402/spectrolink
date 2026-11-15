@@ -30,7 +30,7 @@ import doas_physics as dph  # noqa: E402
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_INFO = {"protocolVersion": PROTOCOL_VERSION,
                "capabilities": {"tools": {}},
-               "serverInfo": {"name": "doas", "version": "0.1.0"}}
+               "serverInfo": {"name": "doas", "version": "1.0.0"}}
 
 _HOME = str(Path.home())
 _WS_ROOT = str(_ROOT.parent)

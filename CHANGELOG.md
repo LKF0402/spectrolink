@@ -2,7 +2,12 @@
 
 本文件以最简形式记录功能演进（不做过程细节罗列）。
 
-## [Unreleased]
+## [1.0.0] — 2026-11-16
+
+**首个正式版本**：7 技术（TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS）、6 个 MCP server、共用 `spectrolink_core` 物理内核；统一交互契约与校验层（各技术不再只有一句 `overall=warn`）、协议层单一实现（JSON-RPC 语义只此一份）、部署形态收敛为本地 stdio。离线契约自检 191 项与保真度审计同为 CI 硬门禁。
+
+以下各轮为达成 1.0.0 的演进记录（按轮次原样保留）。
+
 ### 第二十五轮：CRDS / NDIR / FTIR / DOAS 接入交互契约 + 标定数值修复
 - 新建 `spectrolink_core/interaction_server.py`：把 `interaction_block` 统一接到四 server 的 `DISPATCH`，只做一次包装；会话态改为进程内存储，避免给只读安装目录增加写盘依赖，`*_selftest` 不参与记账
 - 新建 `spectrolink_core/validation.py`：`check` / `validation_block` 统一 `checks[]` 与 `overall` 归并；四 server 不再只有一句 `overall=warn`

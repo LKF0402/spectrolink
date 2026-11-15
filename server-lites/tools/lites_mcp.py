@@ -53,7 +53,7 @@ from tools import lites_tools as ltool  # noqa: E402
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_INFO = {"protocolVersion": PROTOCOL_VERSION,
                "capabilities": {"tools": {}},
-               "serverInfo": {"name": "lites", "version": "0.1.0"}}
+               "serverInfo": {"name": "lites", "version": "1.0.0"}}
 # 返回值（尤其 tools/call 的 log 字段）可能含本地绝对路径（如 HITRAN 缓存目录、
 # PNG 输出目录）。在返回边界统一脱敏：递归把用户目录/工作区绝对路径替换成中性标记。
 # 注意：不硬编码任何真实路径字符串（符合 push 前安全扫描规则），改用 Path.home() 动态获取。
