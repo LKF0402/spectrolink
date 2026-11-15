@@ -430,7 +430,7 @@ def detection_limit(species="H2O", wn0=7185.596, T=296.0, P=1.0, L=30.0, a=0.10,
         _nu, _alpha, _info = get_alpha(species, wn0 - float(kw.get("span", 0.2)),
                                        wn0 + float(kw.get("span", 0.2)), T, P, x_true)
         alpha_L_peak = float(_alpha.max()) * float(L)
-    except Exception:
+    except (ValueError, TypeError, KeyError, OSError):   # 取谱失败（参数/线表/网络）→ 线性判据置 NaN
         alpha_L_peak = float("nan")
     linear_region = not (alpha_L_peak > 0.1)
     est = np.empty(int(n_trials), dtype=float)
@@ -479,7 +479,7 @@ def scan_detection_limit(species="CH4", wn0=2968.5, T=296.0, P=1.01325, a=0.10,
             try:
                 _nu, _alpha, _info = get_alpha(species, wn0 - a, wn0 + a, T, P, x)
                 alphaL[i, j] = float(_alpha.max()) * float(L)
-            except Exception:
+            except (ValueError, TypeError, KeyError, OSError):   # 单格取谱失败 → 该格留 NaN
                 pass
     linear = (alphaL <= 0.1)
     return {"species": str(species).upper(), "wn0": float(wn0), "T": float(T),
@@ -1070,7 +1070,7 @@ def adaptive_modulation_index(nu_grid, alpha_pure, hwhm, cfg, t, v_scan, v_mod_s
             c = np.polyfit(ms, pk, 2)
             if c[0] < 0:
                 m_model = float(np.clip(-c[1] / (2 * c[0]), m_lo, m_hi))
-        except Exception:
+        except (ValueError, TypeError, np.linalg.LinAlgError):   # 样本点退化 → 保持原 m
             pass
 
     # A：解析（Lorentz 2.2 基准 + 谱线密度修正）
@@ -2169,7 +2169,7 @@ def measurement_uncertainty(species, wn_center, T, P, x, L_cm, seed=0, n_repeats
         if _m_fixed is None and _user_m == "auto":
             try:
                 _m_fixed = float(r["meta"]["mod_coeff_m"])
-            except Exception:                              # noqa: BLE001
+            except (KeyError, TypeError, ValueError):      # meta 缺该字段 → 不锁定
                 _m_fixed = None
         peaks[i] = float(np.abs(r["S2f_norm_cyc"])[r["valid_mask"]].max())
 
@@ -2199,7 +2199,7 @@ def measurement_uncertainty(species, wn_center, T, P, x, L_cm, seed=0, n_repeats
             # σ 自身的相对标准差：直接由上面 95% 区间反推，保证与区间**自洽**
             # （早先用 1/√(2·dof) 的近似式，与 χ² 区间在中小样本下不一致）。
             sigma_sd = (rel_hi - rel_lo) / (2.0 * 1.959964)
-        except Exception:
+        except (ValueError, ZeroDivisionError, ArithmeticError, KeyError):   # 样本不足 → 不报区间
             rel_lo = rel_hi = rel
             sigma_sd = float("nan")
     else:
@@ -2422,7 +2422,7 @@ def validate_wms_result(r):
                 f"建议加光程以提高信号余量")
         else:
             add("信号/量化", "pass", f"2f 绝对幅度 ≈ {_lsb_cnt:.0f} LSB（充分）")
-    except Exception:                                          # noqa: BLE001
+    except (KeyError, TypeError, ValueError, IndexError):       # 结果形状不符 → 跳过该项判据
         pass
 
     # 4. 孤立线（标准谐波前提）

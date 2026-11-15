@@ -250,7 +250,7 @@ def _packing_state(out=None):
     """
     try:
         dev = _load_devices()
-    except Exception:                                      # noqa: BLE001
+    except (OSError, ValueError, TypeError):               # 设备库缺失/JSON 损坏/形状异常 → 不下发提醒
         return {"should_prompt": False}
     counts = {k: len(dev.get(k) or {}) for k in ("laser", "pd", "daq", "optics")}
     setups = dev.get("setup") or {}
@@ -475,7 +475,7 @@ def _figure_check(png_path, r, multi=None):
                 warnings.append(
                     f"DAS 吸收峰极弱（αL={alpha_peak:.2e}），图上可能看不见——"
                     f"建议加大光程或换更强的线")
-    except Exception:
+    except (KeyError, TypeError, ValueError, IndexError):   # 结果字典形状不符 → 跳过该项检查
         pass
 
     # 3. 纵轴合理性（用 S2f_norm_cyc + valid_mask）
@@ -496,7 +496,7 @@ def _figure_check(png_path, r, multi=None):
                         warnings.append(
                             f"有效区数据范围仅占总范围 {ratio*100:.1f}%，"
                             f"剔除区可能撑大了纵轴")
-    except Exception:
+    except (KeyError, TypeError, ValueError, IndexError):   # 同上：形状不符按"不适用"处理
         pass
 
     # 判定 overall
@@ -1121,7 +1121,7 @@ def t_invert(peak_2f1f, species="H2O", wn0=7185.596, T=None, P=None, L=None,
                 else:
                     ls_fit = {"error": f"谱长不匹配：spectrum={_meas.size} vs 内部参考={_ref.size}；"
                                        f"请改传 ref_spectrum（同工况、同采样）"}
-        except Exception as _e:                             # noqa: BLE001
+        except (ValueError, TypeError, ArithmeticError) as _e:   # 形状/数值问题 → 退回标定式反演
             ls_fit = {"error": f"{type(_e).__name__}: {_e}"}
 
     out = {"species": str(species).upper(), "mole_frac": x_est,
@@ -1258,7 +1258,7 @@ def t_calibration_curve(species="CH4", wn0=2968.5, T=296.0, P=1.01325,
                 font_manager.findfont(f, fallback_to_default=False)
                 plt.rcParams["font.family"] = f
                 break
-            except Exception:
+            except ValueError:                     # 该字体本机没有 → 试下一个
                 pass
         plt.rcParams["axes.unicode_minus"] = False
 
@@ -1479,7 +1479,7 @@ def provenance_block(out, table=None):
         try:
             prov["line_table"] = ts.th.table_fingerprint(table) \
                 if hasattr(ts, "th") and hasattr(ts.th, "table_fingerprint") else {"table": table}
-        except Exception:                                  # noqa: BLE001
+        except (AttributeError, KeyError, TypeError, ValueError, OSError):   # 指纹不可用 → 退回表名
             prov["line_table"] = {"table": table}
     _dv = (out or {}).get("device_provenance")
     if _dv:
@@ -1530,7 +1530,7 @@ def _validate_any(r):
     """
     try:
         return ts.validate_wms_result(r)
-    except Exception:                                      # noqa: BLE001
+    except (KeyError, TypeError, ValueError, AttributeError):   # 结果形状不匹配 = 校验不适用
         return None
 
 
@@ -1549,7 +1549,7 @@ def apply_contract_blocks(out, tool, session_id="default", extra=None):
             continue
         try:
             val = prod(out, meta)
-        except Exception:                                  # noqa: BLE001
+        except (KeyError, TypeError, ValueError, AttributeError, IndexError):   # 数据形状不匹配 → 该块缺席
             val = None
         # 假值即缺席（None / False / 空列表 / 空字典）：
         # 不为"字段齐全"而写一个看着有、实则空的块——那会让模型以为已拥有该信息。
@@ -1564,7 +1564,7 @@ def apply_contract_blocks(out, tool, session_id="default", extra=None):
             out["interaction"] = inter
             out["next_required_actions"] = acts
             written += ["interaction", "next_required_actions"]
-        except Exception:                                  # noqa: BLE001
+        except (KeyError, TypeError, ValueError, AttributeError, IndexError):   # 同上：不阻断主结果
             pass
     if extra and extra.get("clarify") is not None:
         out["clarify"] = extra["clarify"]
@@ -2139,7 +2139,7 @@ def t_wms_instrument(species="CH4", wn_center=2968.5, T=None, P=None, x=None, L_
             try:
                 _mod_locked = float(r["meta"]["mod_coeff_m"])
                 _inst_lock["m_opt"] = _mod_locked
-            except Exception:                              # noqa: BLE001
+            except (KeyError, TypeError, ValueError):      # meta 缺该字段 → 不锁定
                 _mod_locked = None
         # 归一化方法同样要锁定：2f/1f 是否可用靠"非吸收区泄漏 ≤30% 峰值"判，噪声下
         # 这条判据会随浓度翻转 → 一个浓度 2f/1f、另一个 2f/I0，量级差两个数量级，
@@ -2378,7 +2378,7 @@ def t_baseline_simulate(species="CO", wn_center=2183.22, T=296.0, P=1.01325,
                 _fmgr.findfont(_f, fallback_to_default=False)
                 _plt.rcParams["font.family"] = _f
                 break
-            except Exception:                              # noqa: BLE001
+            except ValueError:                     # 该字体本机没有 → 试下一个
                 pass
         _plt.rcParams["axes.unicode_minus"] = False
         _fig, _ax = _plt.subplots(2, 2, figsize=(11, 7))
@@ -2807,7 +2807,7 @@ def t_allan(signal, fs, max_tau=None, tau_points=100, save_png=False):
                 font_manager.findfont(f, fallback_to_default=False)
                 plt.rcParams["font.family"] = f
                 break
-            except Exception:
+            except ValueError:                     # 该字体本机没有 → 试下一个
                 pass
         plt.rcParams["axes.unicode_minus"] = False
 
@@ -3511,7 +3511,7 @@ def main():
     for _s in (sys.stdin, sys.stdout, sys.stderr):
         try:
             _s.reconfigure(encoding="utf-8")
-        except Exception:
+        except (AttributeError, OSError):          # 已被包装/不可重配 → 保持原编码继续
             pass
     if "--selftest" in sys.argv:
         try:

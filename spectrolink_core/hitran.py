@@ -169,7 +169,7 @@ def _isotope_known(M, I):
         h = _hapi()
         # ⚠ HAPI 的 ISO 以 **(M, I) 元组** 为键（不是嵌套字典）：ISO[(6, 1)] = [id, 'CH4', 丰度, 质量, 'CH4']
         return (int(M), int(I)) in h.ISO
-    except Exception:
+    except (AttributeError, KeyError, TypeError, ValueError, OSError):   # 索引不可用 → None
         return None
 
 
@@ -181,7 +181,7 @@ def _coverage(table):
             return None
         nu = np.asarray(h.getColumn(table, "nu"), dtype=float)
         return (float(nu.min()), float(nu.max()), int(nu.size)) if nu.size else None
-    except Exception:
+    except (AttributeError, KeyError, TypeError, ValueError, IndexError, OSError):   # 表不可读 → None
         return None
 
 
@@ -195,7 +195,7 @@ def _loaded_covering(base, numin, numax):
     h = _hapi()
     try:
         names = h.tableList()
-    except Exception:
+    except (AttributeError, OSError, ValueError, TypeError):   # 本地索引还没建起来 → 无表可复用
         return None
     best = None
     for t in names:
@@ -413,7 +413,7 @@ def table_fingerprint(table):
             fp["sha256_16"] = h.hexdigest()[:16]
             fp["data_file"] = _P(f).name
             fp["n_lines"] = sum(1 for _ in open(f, "rb")) - 1 if f.stat().st_size else 0
-    except Exception:                                     # noqa: BLE001
+    except (OSError, ValueError, TypeError):            # 取指纹失败 → 退回仅表名
         pass
     _TABLE_FP[key] = dict(fp)
     return fp
