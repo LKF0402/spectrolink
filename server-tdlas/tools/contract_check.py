@@ -54,8 +54,25 @@ import tdlas_mcp as M                       # noqa: E402
 # ★ 契约自检必须自包含：不读用户真实设备库/会话文件。
 #   否则 CI（干净环境）通过、用户本地（有历史设备）假失败 —— 同一份代码两种结果。
 _ISOLATED_DIR = Path(tempfile.mkdtemp(prefix="spectrolink_contract_"))
-M._DEVICE_FILE = _ISOLATED_DIR / ".tdlas_devices.json"
-M._SESSION_FILE = _ISOLATED_DIR / ".tdlas_session.json"
+import tdlas_state as _state                       # noqa: E402
+
+
+def _isolate(device_file=None, session_file=None):
+    """把设备库/会话文件同时打到隔离路径。
+
+    状态层已拆到 tdlas_state，读写走的是那边的模块全局；只改 mcp 的副本等于没改，
+    会让"用户本地有历史设备"的环境读到真实设备库而假失败。所以两边必须一起改。
+    """
+    if device_file is not None:
+        M._DEVICE_FILE = device_file
+        _state._DEVICE_FILE = device_file
+    if session_file is not None:
+        M._SESSION_FILE = session_file
+        _state._SESSION_FILE = session_file
+
+
+_isolate(_ISOLATED_DIR / ".tdlas_devices.json",
+         _ISOLATED_DIR / ".tdlas_session.json")
 
 _OK = 0
 _BAD = 0
@@ -368,16 +385,16 @@ check("WMS/DAS 均回显生效的激光参数",
       "_LASER_ECHO_KEYS" in inspect.getsource(M.t_wms_instrument)
       and "_LASER_ECHO_KEYS" in inspect.getsource(M.t_das_instrument))
 
-_old = M._SESSION_FILE
+_old = _state._SESSION_FILE
 # ⚠ 这一节会真写磁盘：若环境（沙箱 / 只读临时目录 / 权限）不允许，
 #   旧写法会抛 PermissionError 直接终止脚本 → **后面数十项检查被静默跳过而 CI 仍然"绿"**。
 #   现改为：写不了就记 SKIP（不计入失败，但在汇总里显式报出），继续跑完。
 _SKIP_REASON = None
 try:
-    M._SESSION_FILE = Path(tempfile.mkdtemp()) / "_s.json"
+    _isolate(session_file=Path(tempfile.mkdtemp()) / "_s.json")
     M._save_sessions({"a": {"confirmed": {"x": 1}}})
-    _atomic_ok = (json.loads(M._SESSION_FILE.read_text(encoding="utf-8"))["a"]["confirmed"]["x"] == 1
-                  and not list(M._SESSION_FILE.parent.glob(M._SESSION_FILE.name + "*.tmp")))
+    _atomic_ok = (json.loads(_state._SESSION_FILE.read_text(encoding="utf-8"))["a"]["confirmed"]["x"] == 1
+                  and not list(_state._SESSION_FILE.parent.glob(_state._SESSION_FILE.name + "*.tmp")))
 except Exception as e:                                   # noqa: BLE001
     _atomic_ok = None
     _SKIP_REASON = f"{type(e).__name__}: {e}"
@@ -393,10 +410,10 @@ else:
         M._save_sessions({"b": {"confirmed": {"y": 2}}})
         M._save_sessions({"c": {"confirmed": {"z": 3}}})
         check("连续写盘不抛异常（含重试/降级路径）",
-              json.loads(M._SESSION_FILE.read_text(encoding="utf-8"))["c"]["confirmed"]["z"] == 3)
+              json.loads(_state._SESSION_FILE.read_text(encoding="utf-8"))["c"]["confirmed"]["z"] == 3)
     except Exception as e:                              # noqa: BLE001
         check("连续写盘不抛异常（含重试/降级路径）", False, f"-> {type(e).__name__}: {e}")
-M._SESSION_FILE = _old
+_isolate(session_file=_old)
 
 from spectrolink_core import hitran as TH    # noqa: E402  （core 共用内核；离线：HAPI 自带索引表）
 check("同位素判据正确（HAPI 的 ISO 以 (M, I) 元组为键）",

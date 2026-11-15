@@ -73,3 +73,7 @@ local/
 __pycache__/
 
 server-tdlas/local/
+# 重构期间的临时备份（不入库）
+*.py.bak
+*.py.bak2
+*.py.step2
