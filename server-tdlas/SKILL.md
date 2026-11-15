@@ -24,6 +24,7 @@ description: SpectroLink 子服务器 server-tdlas（L2 参考，AI 自动读取
 | 自检 | `tdlas_selftest` |
 | Allan 方差 | `tdlas_allan` |
 | 校准曲线 | `tdlas_calibration_curve` |
+| 导出数据（CSV/JSON） | `tdlas_export` |
 
 ## A. 交互契约（硬约束）
 
