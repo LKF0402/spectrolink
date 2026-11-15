@@ -16,7 +16,7 @@ TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
 <img src="https://img.shields.io/badge/techniques-7-9C6BD4" alt="Techniques">
 <a href="https://github.com/LKF0402/spectrolink/commits/main"><img src="https://img.shields.io/github/last-commit/LKF0402/spectrolink" alt="Last commit"></a>
 <a href="https://github.com/LKF0402/spectrolink/issues"><img src="https://img.shields.io/github/issues/LKF0402/spectrolink" alt="Issues"></a>
-<img src="https://img.shields.io/badge/docs-TECHNICAL%20%2B%20USAGE-blueviolet" alt="Docs">
+<img src="https://img.shields.io/badge/docs-TECHNICAL%20%C2%B7%20USAGE-blueviolet" alt="Docs">
 
 </div>
 
