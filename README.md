@@ -3,57 +3,51 @@
 <h1>SpectroLink</h1>
 
 <p><b>多技术光谱传感仿真 MCP</b><br>
-TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS — 自然语言驱动 · 无需 API key</p>
+TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
+7 种技术 · 6 个 server · 自然语言驱动 · 本地 stdio · 无需 API key</p>
 
+<a href="https://github.com/LKF0402/spectrolink/releases"><img src="https://img.shields.io/github/v/release/LKF0402/spectrolink?color=6B8FD4&label=release" alt="Release"></a>
+<a href="https://github.com/LKF0402/spectrolink/stargazers"><img src="https://img.shields.io/github/stars/LKF0402/spectrolink?color=yellow" alt="Stars"></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-green.svg" alt="License"></a>
+<a href="https://github.com/LKF0402/spectrolink/actions/workflows/ci.yml"><img src="https://github.com/LKF0402/spectrolink/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB" alt="Python">
 <img src="https://img.shields.io/badge/MCP-stdio-6B8FD4" alt="MCP">
-<img src="https://img.shields.io/badge/HITRAN-HAPI%201.x-4C8C4A" alt="HITRAN">
-<img src="https://github.com/LKF0402/spectrolink/actions/workflows/ci.yml/badge.svg" alt="CI">
-<img src="https://img.shields.io/badge/release-v0.2.0-blue" alt="Release">
-<img src="https://img.shields.io/badge/license-GPLv3-green" alt="License">
+<img src="https://img.shields.io/badge/HITRAN-2024-4C8C4A" alt="HITRAN">
+<img src="https://img.shields.io/badge/techniques-7-9C6BD4" alt="Techniques">
+<a href="https://github.com/LKF0402/spectrolink/commits/main"><img src="https://img.shields.io/github/last-commit/LKF0402/spectrolink" alt="Last commit"></a>
+<a href="https://github.com/LKF0402/spectrolink/issues"><img src="https://img.shields.io/github/issues/LKF0402/spectrolink" alt="Issues"></a>
+<img src="https://img.shields.io/badge/docs-TECHNICAL%20%2B%20USAGE-blueviolet" alt="Docs">
 
 </div>
 
+> **一句话**：告诉 AI 你的气体、波段和工况，它给你仪器级仿真波形、谱图、检测限与不确定度——全程本地跑，不需要 API key。
+
 ---
 
-## 📖 概述
+## 🚀 三秒上手
 
-基于 MCP（Model Context Protocol）的**多技术光谱传感仿真**，已实现 **TDLAS-DA / TDLAS-WMS / LITES / NDIR / CRDS / FTIR / DOAS** 七个技术、**六个 MCP server**（每技术独立服务器、独立加载控制上下文）。以 TDLAS 为例，对实验**全链路**做仪器级建模（而非只算一条理论 2f 曲线）：
+**第一次用就复制下面整段给 AI 助手**：它自己 clone、装依赖、写 MCP 配置、装 Skill、跑自检，你不需要改任何路径。
 
 ```
-DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气体吸收 → 光电探测 → ADC 量化 → 数字锁相 → 1f / 2f / 2f·1f⁻¹
+我要用 SpectroLink（多技术光谱仿真 MCP，仓库 https://github.com/LKF0402/spectrolink）跑 TDLAS/WMS 光谱仿真。请全程帮我搭好，不要让我手动改路径：
+
+1. 确认本机 Python ≥ 3.10；版本不够先告诉我怎么装，不要猜。
+2. 选一个固定目录执行 git clone https://github.com/LKF0402/spectrolink.git，记下它的绝对路径。
+3. 进入该目录，依次执行 pip install -r requirements.txt、pip install -e ./spectrolink_core。
+4. 找到我当前 MCP 客户端（Claude Desktop / Cursor / Cline / VS Code 之一）的配置文件，写入 spectrolink-tdlas：
+   command = 本机 python 的绝对路径；args = [该目录绝对路径 + "/server-tdlas/tools/tdlas_mcp.py"]
+   lites / ndir / crds / ftir / doas 五个先 disabled，我要用时再开。
+   找不到客户端配置文件时，把该目录的 mcp.config.example.json 按真实路径改好交给我，并说明该贴到哪。
+5. 把该目录的 SKILL.md 安装成 Skill（按我客户端的 Skill 目录约定放；不确定就告诉我该放哪）。它是唯一入口，子技术说明 AI 会按需自动读，别再单独装。
+6. 执行 python server-tdlas/tools/tdlas_mcp.py --selftest，把结果贴给我。
+7. 最后告诉我：装在哪、改了哪个配置文件、最初三句可以直接说的话。
+
+任何一步失败就停下来报告卡点，不要跳过。
 ```
 
-## 🏗️ 架构（monorepo）
+装好后直接说人话，示例见 [USAGE.md](./USAGE.md)；行为规范见 [SKILL.md](./SKILL.md)。
 
-| 模块 | 作用 |
-|---|---|
-| **spectrolink_core** | 共用内核：HITRAN 线表/缓存/指纹、Voigt、线强外推、同位素叠加、Allan/LOD 基座、器件库 schema；**MCP 协议层（stdio JSON-RPC）、状态文件原子写、会话报告块、交互契约记账与保真度判定也只此一份**（独立依赖包，`pip install -e ./spectrolink_core`） |
-| **server-tdlas** | TDLAS-DA / TDLAS-WMS 独立 MCP 服务器（工具 `t_*`） |
-| **server-lites** | LITES 独立 MCP 服务器（工具 `l_*`） |
-| **server-ndir** | NDIR（非分散红外）独立 MCP 服务器（工具 `t_ndir_*`） |
-| **server-crds** | CRDS（腔衰荡）独立 MCP 服务器（工具 `t_crds_*`） |
-| **server-ftir** | FTIR（傅里叶变换红外）独立 MCP 服务器（工具 `t_ftir_*`） |
-| **server-doas** | DOAS（差分吸收光谱）独立 MCP 服务器（工具 `t_doas_*`） |
-
-- 共用 = 独立依赖包，**不是代码拷贝**；core 只放物理量级、不放技术特有假设（锁相、QTF 谐振等留在各 server），一处 bug 只修一处。
-- **按需启用**：每个技术是独立服务器，配置里启哪个加载哪个，控制上下文占用。
-- **不内置仪器**：默认参数仅作演示占位；真实器件参数（datasheet / 实测 / 标定）通过 `t_device` / `l_device` 用户交互获取。
-- 技术适配矩阵见 [docs/ADAPTATION_MATRIX.md](./docs/ADAPTATION_MATRIX.md)。
-
-内置 HITRAN 取数与吸收谱计算（HAPI 1.x，**不需要 API key**），由 AI 助手以自然语言驱动仿真。用途：**系统选型、方法验证、排除错误设计**——不替代实测。
-
-## ✨ 核心特性
-
-- **全链路建模**：DAQ 调制 → 激光调谐 → HITRAN 吸收 → PD → ADC → 数字锁相；可选 etalon 条纹、RIN、1/f 漂移、RAM/AM
-- **七技术一体**：TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS，独立 server 按需加载、共用 `spectrolink_core` 物理内核
-- **混合气多组分**：`mixture` 严格按 `α = Σ xᵢ·α_pureᵢ(T,P)` 逐点相加（**不用 x·P 当分压**），并返回各组分归因
-- **AI 交互契约**：六个技术的仪器/分析工具统一返回 `interaction` 与机器可读 `next_required_actions`；CRDS / NDIR / FTIR / DOAS 的动作只依据各自真实返回字段（浓度域、拟合质量、谱源降级、缺输入等），selftest 不参与记账
-- **保真度台账**：默认生效 11 项 / 需显式开启 6 项 / **未建模 7 项**，未建模项随结果披露
-- **可信度分层**：10 项物理校验与交互合规**分别**计分
-- **可复现 + 离线门禁**：`seed=0` 逐位可复现；契约自检 191 项与保真度审计均为 CI 硬门禁（不依赖网络）
-
-其他：`return_xy` 透出锁相 X/Y 用于 RAM/AM 诊断；`tdlas_invert(n_repeats>0)` 给测量不确定度（仅统计分量）；`x_list` 多浓度同图。细节见 [TECHNICAL.md](./TECHNICAL.md) 与 [docs/VALIDATION.md](./docs/VALIDATION.md)。
+> 💡 AI 无法执行本地命令时，才需要手动装 —— 见下方折叠块「⚙️ 手动安装与自检」。
 
 ## 📊 效果展示
 
@@ -74,59 +68,50 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 
 </details>
 
-## 🚀 快速上手
+## ✨ 核心特性
 
-```bash
-git clone https://github.com/LKF0402/spectrolink.git
-cd spectrolink
-pip install -r requirements.txt
-pip install -e ./spectrolink_core          # 共用内核
+- **全链路建模**：DAQ 调制 → 激光调谐 → HITRAN 吸收 → PD → ADC → 数字锁相；可选 etalon 条纹、RIN、1/f 漂移、RAM/AM
+- **七技术一体**：TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS，独立 server 按需加载、共用 `spectrolink_core` 物理内核
+- **混合气多组分**：`mixture` 严格按 `α = Σ xᵢ·α_pureᵢ(T,P)` 逐点相加（**不用 x·P 当分压**），并返回各组分归因
+- **AI 交互契约**：六个技术的仪器/分析工具统一返回 `interaction` 与机器可读 `next_required_actions`；CRDS / NDIR / FTIR / DOAS 的动作只依据各自真实返回字段（浓度域、拟合质量、谱源降级、缺输入等），selftest 不参与记账
+- **保真度台账**：默认生效 11 项 / 需显式开启 6 项 / **未建模 7 项**，未建模项随结果披露
+- **可信度分层**：10 项物理校验与交互合规**分别**计分
+- **可复现 + 离线门禁**：`seed=0` 逐位可复现；契约自检 191 项与保真度审计均为 CI 硬门禁（不依赖网络）
 
-python server-tdlas/tools/tdlas_mcp.py --selftest   # TDLAS 服务器自检（需访问 hitran.org）
-python server-tdlas/tools/contract_check.py         # 离线契约自检（CI 硬门禁）
-python server-tdlas/tools/tdlas_fidelity.py         # 离线保真度审计（CI 硬门禁）
-python server-tdlas/tools/alpha_crossval.py         # α(ν) 独立交叉校验（与 HAPI 互校）
-python server-lites/tools/lites_mcp.py --selftest   # LITES 服务器自检
-python server-ndir/tools/ndir_mcp.py --selftest     # NDIR 服务器自检（离线）
-python server-crds/tools/crds_mcp.py --selftest     # CRDS 服务器自检（HITRAN 失败自动降级）
-python server-ftir/tools/ftir_mcp.py --selftest     # FTIR 服务器自检（离线）
-python server-doas/tools/doas_mcp.py --selftest     # DOAS 服务器自检（离线）
-```
+其他：`return_xy` 透出锁相 X/Y 用于 RAM/AM 诊断；`tdlas_invert(n_repeats>0)` 给测量不确定度（仅统计分量）；`x_list` 多浓度同图。细节见 [TECHNICAL.md](./TECHNICAL.md) 与 [docs/VALIDATION.md](./docs/VALIDATION.md)。
 
-接入 MCP 客户端：把 `mcp.config.example.json` 里的路径改为本机路径即可（手动方式）。
+## 📖 它是什么
 
-### 零占位一键接入（第一次用的人走这条）
-
-把下面整段复制给你的 AI 助手。它自己完成 clone、装依赖、写 MCP 配置、装 Skill、跑自检——**你不需要改任何路径**：
+基于 MCP（Model Context Protocol）的**多技术光谱传感仿真**，已实现 **TDLAS-DA / TDLAS-WMS / LITES / NDIR / CRDS / FTIR / DOAS** 七个技术、**六个 MCP server**（每技术独立服务器、独立加载控制上下文）。以 TDLAS 为例，对实验**全链路**做仪器级建模（而非只算一条理论 2f 曲线）：
 
 ```
-我要用 SpectroLink（多技术光谱仿真 MCP，仓库 https://github.com/LKF0402/spectrolink）跑 TDLAS/WMS 光谱仿真。请全程帮我搭好，不要让我手动改路径：
-
-1. 确认本机 Python ≥ 3.10；版本不够先告诉我怎么装，不要猜。
-2. 选一个固定目录执行 git clone https://github.com/LKF0402/spectrolink.git，记下它的绝对路径。
-3. 进入该目录，依次执行 pip install -r requirements.txt、pip install -e ./spectrolink_core。
-4. 找到我当前 MCP 客户端（Claude Desktop / Cursor / Cline / VS Code 之一）的配置文件，写入 spectrolink-tdlas：
-   command = 本机 python 的绝对路径；args = [该目录绝对路径 + "/server-tdlas/tools/tdlas_mcp.py"]
-   lites / ndir / crds / ftir / doas 五个先 disabled，我要用时再开。
-   找不到客户端配置文件时，把该目录的 mcp.config.example.json 按真实路径改好交给我，并说明该贴到哪。
-5. 把该目录的 SKILL.md 安装成 Skill（按我客户端的 Skill 目录约定放；不确定就告诉我该放哪）。它是唯一入口，子技术说明 AI 会按需自动读，别再单独装。
-6. 执行 python server-tdlas/tools/tdlas_mcp.py --selftest，把结果贴给我。
-7. 最后告诉我：装在哪、改了哪个配置文件、最初三句可以直接说的话。
-
-任何一步失败就停下来报告卡点，不要跳过。
+DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气体吸收 → 光电探测 → ADC 量化 → 数字锁相 → 1f / 2f / 2f·1f⁻¹
 ```
 
-装好后直接说人话就行，示例见 [USAGE.md](./USAGE.md)。
+<details>
+<summary><b>🏗️ 架构（monorepo）</b></summary>
 
-## ⚠️ Skill 不是可选项
+| 模块 | 作用 |
+|---|---|
+| **spectrolink_core** | 共用内核：HITRAN 线表/缓存/指纹、Voigt、线强外推、同位素叠加、Allan/LOD 基座、器件库 schema；**MCP 协议层（stdio JSON-RPC）、状态文件原子写、会话报告块、交互契约记账与保真度判定也只此一份**（独立依赖包，`pip install -e ./spectrolink_core`） |
+| **server-tdlas** | TDLAS-DA / TDLAS-WMS 独立 MCP 服务器（工具 `t_*`） |
+| **server-lites** | LITES 独立 MCP 服务器（工具 `l_*`） |
+| **server-ndir** | NDIR（非分散红外）独立 MCP 服务器（工具 `t_ndir_*`） |
+| **server-crds** | CRDS（腔衰荡）独立 MCP 服务器（工具 `t_crds_*`） |
+| **server-ftir** | FTIR（傅里叶变换红外）独立 MCP 服务器（工具 `t_ftir_*`） |
+| **server-doas** | DOAS（差分吸收光谱）独立 MCP 服务器（工具 `t_doas_*`） |
 
-`SKILL.md` 不是文档，而是 **AI 的行为规范**（唯一安装入口）：服务器只能保证 AI「看到」`next_required_actions`，Skill 才规定 AI「照做」——保留默认值必须显式标注、器件参数来源（`source`）必须如实填写、设备命名须含型号/波长。
+- 共用 = 独立依赖包，**不是代码拷贝**；core 只放物理量级、不放技术特有假设（锁相、QTF 谐振等留在各 server），一处 bug 只修一处。
+- **按需启用**：每个技术是独立服务器，配置里启哪个加载哪个，控制上下文占用。
+- **不内置仪器**：默认参数仅作演示占位；真实器件参数（datasheet / 实测 / 标定）通过 `t_device` / `l_device` 用户交互获取。
+- 技术适配矩阵见 [docs/ADAPTATION_MATRIX.md](./docs/ADAPTATION_MATRIX.md)。
 
-**渐进式披露架构**：根 `SKILL.md` 只含技术选择矩阵与自动调度协议（L1）；各技术细节（路由表、默认披露、专属坑点）在 `server-<技术>/SKILL.md`（L2），由 AI 按任务自动读取——**用户只需安装根 SKILL 一个技能**，无需按技术分别安装。
+内置 HITRAN 取数与吸收谱计算（HAPI 1.x，**不需要 API key**），由 AI 助手以自然语言驱动仿真。用途：**系统选型、方法验证、排除错误设计**——不替代实测。
 
-安装（任选其一）：放进客户端的 Skill 目录；或让 AI 直接读取该文件作为行为规范。
+</details>
 
-## 🔧 工具列表
+<details>
+<summary><b>🔧 工具列表（7 技术 / 6 server）</b></summary>
 
 | 工具 | 功能 |
 |---|---|
@@ -150,7 +135,7 @@ python server-doas/tools/doas_mcp.py --selftest     # DOAS 服务器自检（离
 >
 > 四个仿真工具另有 `iso`（同位素）开关：**不传=主同位素**（历史口径，与旧版本结果逐位一致）；`iso="all"`=该分子全部 HITRAN 同位素按丰度叠加——CH4 2968 cm⁻¹ 等**密集谱区**邻近同位素线（如 ¹³CH₄，ν₃ 位移 ±1-2 cm⁻¹）贡献不可忽略，`all` 的峰形/峰位更贴近实测；`iso=<整数>`=指定同位素编号（HAPI 口径，CH4: 1=¹²CH₄、2=¹³CH₄、3=¹²CH₃D、4=¹³CH₃D）。窗口内 0 条线的稀有同位素自动跳过并披露 `iso_skipped`。
 
-### LITES 工具（server-lites）
+#### LITES 工具（server-lites）
 
 | 工具 | 功能 |
 |---|---|
@@ -160,7 +145,7 @@ python server-doas/tools/doas_mcp.py --selftest     # DOAS 服务器自检（离
 | lites_resonance / lites_sweep | 共振跟踪 / 参数扫描 |
 | lites_selftest | 物理内核自检（标定自洽 / 标度律 / 饱和 / 失谐） |
 
-### 新技术工具（server-ndir / server-crds / server-ftir / server-doas）
+#### 新技术工具（server-ndir / server-crds / server-ftir / server-doas）
 
 | 技术 | 工具 | 功能 |
 |---|---|---|
@@ -173,7 +158,44 @@ python server-doas/tools/doas_mcp.py --selftest     # DOAS 服务器自检（离
 | **DOAS** | t_doas_forward | UV-Vis 截面正演（慢变背景多项式分离 + 联合最小二乘） |
 | | t_doas_calibrate / t_doas_invert | 标定曲线 / 实测谱反演 |
 
-## 运行形态：仅本地
+</details>
+
+<details>
+<summary><b>⚙️ 手动安装与自检</b></summary>
+
+```bash
+git clone https://github.com/LKF0402/spectrolink.git
+cd spectrolink
+pip install -r requirements.txt
+pip install -e ./spectrolink_core          # 共用内核
+
+python server-tdlas/tools/tdlas_mcp.py --selftest   # TDLAS 服务器自检（需访问 hitran.org）
+python server-tdlas/tools/contract_check.py         # 离线契约自检（CI 硬门禁）
+python server-tdlas/tools/tdlas_fidelity.py         # 离线保真度审计（CI 硬门禁）
+python server-tdlas/tools/alpha_crossval.py         # α(ν) 独立交叉校验（与 HAPI 互校）
+python server-lites/tools/lites_mcp.py --selftest   # LITES 服务器自检
+python server-ndir/tools/ndir_mcp.py --selftest     # NDIR 服务器自检（离线）
+python server-crds/tools/crds_mcp.py --selftest     # CRDS 服务器自检（HITRAN 失败自动降级）
+python server-ftir/tools/ftir_mcp.py --selftest     # FTIR 服务器自检（离线）
+python server-doas/tools/doas_mcp.py --selftest     # DOAS 服务器自检（离线）
+```
+
+接入 MCP 客户端：把 `mcp.config.example.json` 里的路径改为本机路径即可（手动方式）。
+
+</details>
+
+<details>
+<summary><b>⚠️ Skill 不是可选项 · 运行形态（仅本地）</b></summary>
+
+#### ⚠️ Skill 不是可选项
+
+`SKILL.md` 不是文档，而是 **AI 的行为规范**（唯一安装入口）：服务器只能保证 AI「看到」`next_required_actions`，Skill 才规定 AI「照做」——保留默认值必须显式标注、器件参数来源（`source`）必须如实填写、设备命名须含型号/波长。
+
+**渐进式披露架构**：根 `SKILL.md` 只含技术选择矩阵与自动调度协议（L1）；各技术细节（路由表、默认披露、专属坑点）在 `server-<技术>/SKILL.md`（L2），由 AI 按任务自动读取——**用户只需安装根 SKILL 一个技能**，无需按技术分别安装。
+
+安装（任选其一）：放进客户端的 Skill 目录；或让 AI 直接读取该文件作为行为规范。
+
+#### 🏃 运行形态：仅本地
 
 本项目**只做本地 MCP**（stdio 传输）：客户端拉起 `python server-<技术>/tools/<技术>_mcp.py`，
 用 stdin/stdout 收发 JSON-RPC。不提供 HTTP 端口、公网隧道或 Bearer 鉴权——
@@ -183,7 +205,10 @@ python server-doas/tools/doas_mcp.py --selftest     # DOAS 服务器自检（离
 python server-tdlas/tools/tdlas_mcp.py --selftest   # 本地跑一遍自检
 ```
 
-## 📚 文档
+</details>
+
+<details>
+<summary><b>📚 文档</b></summary>
 
 | 文档 | 内容 |
 |---|---|
@@ -194,6 +219,8 @@ python server-tdlas/tools/tdlas_mcp.py --selftest   # 本地跑一遍自检
 | [spectrolink_core/README.md](./spectrolink_core/README.md) | 共用物理内核说明 |
 | [server-tdlas/tools/tdlas_fidelity.py](./server-tdlas/tools/tdlas_fidelity.py) | 保真度登记表：单一真源 + 离线审计 |
 | [CHANGELOG.md](./CHANGELOG.md) | 版本更新记录 |
+
+</details>
 
 ## 📝 引用
 
