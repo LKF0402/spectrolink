@@ -4,7 +4,7 @@
 
 <p><b>多技术光谱传感仿真 MCP</b><br>
 TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
-7 种技术 · 6 个 server · 自然语言驱动 · 本地 stdio · 无需 API key</p>
+7 种技术 · 6 个 server · 43 个工具 · 自然语言驱动 · 本地 stdio · 无需 API key</p>
 
 <a href="https://github.com/LKF0402/spectrolink/releases"><img src="https://img.shields.io/github/v/release/LKF0402/spectrolink?color=6B8FD4&label=release" alt="Release"></a>
 <a href="https://github.com/LKF0402/spectrolink/stargazers"><img src="https://img.shields.io/github/stars/LKF0402/spectrolink?color=yellow" alt="Stars"></a>
@@ -103,7 +103,7 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 
 - 共用 = 独立依赖包，**不是代码拷贝**；core 只放物理量级、不放技术特有假设（锁相、QTF 谐振等留在各 server），一处 bug 只修一处。
 - **按需启用**：每个技术是独立服务器，配置里启哪个加载哪个，控制上下文占用。
-- **不内置仪器**：默认参数仅作演示占位；真实器件参数（datasheet / 实测 / 标定）通过 `t_device` / `l_device` 用户交互获取。
+- **不内置仪器**：默认参数仅作演示占位；真实器件参数（datasheet / 实测 / 标定）通过 `tdlas_device` / `lites_device` 用户交互获取。
 - 技术适配矩阵见 [docs/ADAPTATION_MATRIX.md](./docs/ADAPTATION_MATRIX.md)。
 
 内置 HITRAN 取数与吸收谱计算（HAPI 1.x，**不需要 API key**），由 AI 助手以自然语言驱动仿真。用途：**系统选型、方法验证、排除错误设计**——不替代实测。
@@ -111,7 +111,7 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 </details>
 
 <details>
-<summary><b>🔧 工具列表（7 技术 / 6 server）</b></summary>
+<summary><b>🔧 工具列表（7 技术 / 6 server / 43 个工具）</b></summary>
 
 | 工具 | 功能 |
 |---|---|
@@ -127,6 +127,9 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 | tdlas_session | 跨会话工况参数持久化 |
 | tdlas_device | 硬件参数库（激光器 / 探测器 / DAQ / 光学） |
 | tdlas_guide | AI 交互协议、术语表与保真度台账 |
+| tdlas_calibration_curve | 标定曲线：浓度 vs 2f/1f 峰高（线性/非线性拟合） |
+| tdlas_allan | Allan 方差：系统稳定性与最优积分时间评估 |
+| tdlas_export | 结果导出为 CSV / JSON |
 | tdlas_selftest | 全链路自检 |
 
 > 四个仿真工具（及透传的 `tdlas_review`）共用一对可选项：`mixture`（混合气）与 `x_list`（单物种多浓度扫描）。两者**互斥**，且与单 `x` **二选一**。
@@ -143,6 +146,12 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 | lites_mdl | 最小可探测浓度（MDL）与噪声预算 |
 | lites_device | 器件库（仅内置默认演示器件，真实音叉交互获取） |
 | lites_resonance / lites_sweep | 共振跟踪 / 参数扫描 |
+| lites_waveform | 合成 2f 波形 + 6 子图（吸收线型 / 机械传递 / 热扩散 / 2f / 扣基线 / 噪声预算） |
+| lites_invert | 实测 2f 幅值 → 摩尔分数（含反推自洽性校验） |
+| lites_review | 实验方案评审：LITES 7 类失效模式逐条检查 |
+| lites_compare | 多器件统一口径对比（同线强/浓度/噪声） |
+| lites_noise_budget | 噪声预算拆分：1/f / 白噪声 / TIA 各自占比 |
+| lites_guide | LITES 交互协议与术语检索（新手先调这个） |
 | lites_selftest | 物理内核自检（标定自洽 / 标度律 / 饱和 / 失谐） |
 
 #### 新技术工具（server-ndir / server-crds / server-ftir / server-doas）
@@ -157,6 +166,8 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 | | t_ftir_invert | 恢复谱数组 → 浓度反演 |
 | **DOAS** | t_doas_forward | UV-Vis 截面正演（慢变背景多项式分离 + 联合最小二乘） |
 | | t_doas_calibrate / t_doas_invert | 标定曲线 / 实测谱反演 |
+
+> NDIR / CRDS / FTIR / DOAS 还各带一个 `*_selftest`（`t_ndir_selftest` 等），用于改动后一键回归。
 
 </details>
 

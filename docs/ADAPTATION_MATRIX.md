@@ -24,9 +24,9 @@ SpectroLink (monorepo)
 
 | 技术 | 状态 | core 复用 | 技术独有物理模块 | MCP 工具面 | 默认参数策略 |
 |---|---|---|---|---|---|
-| **TDLAS-DA**（直接吸收） | ✅ 已实现 | hitran / stats | L-I 曲线、基线拟合、吸光度 αL | `t_das_*` | 默认参数+标注；仪器经 `t_device` 交互获取 |
-| **TDLAS-WMS**（波长调制） | ✅ 已实现 | hitran / lockin / stats | 1f/2f/2f·1f⁻¹、调制系数 m、RAM | `t_wms_*` | 同上 |
-| **LITES**（光热光谱） | ✅ 已实现 | hitran / lockin / stats | QTF 谐振（f0/Q）、热弹机理、τ_acc、MDL | `l_*` | 单默认器件（商用去壳音叉）仅作演示；真实音叉参数交互获取 |
+| **TDLAS-DA**（直接吸收） | ✅ 已实现 | hitran / stats | L-I 曲线、基线拟合、吸光度 αL | `tdlas_das_instrument / das_chain`（另 `tdlas_simulate`） | 默认参数+标注；仪器经 `tdlas_device` 交互获取 |
+| **TDLAS-WMS**（波长调制） | ✅ 已实现 | hitran / lockin / stats | 1f/2f/2f·1f⁻¹、调制系数 m、RAM | `tdlas_wms_instrument`（另 `tdlas_simulate`） | 同上 |
+| **LITES**（光热光谱） | ✅ 已实现 | hitran / lockin / stats | QTF 谐振（f0/Q）、热弹机理、τ_acc、MDL | `lites_forward / waveform / invert / mdl / noise_budget / resonance / sweep / compare / review / device / guide / selftest` | 单默认器件（商用去壳音叉）仅作演示；真实音叉参数交互获取 |
 | **NDIR**（非分散红外） | ✅ 已实现 | —（宽带源，无 HITRAN 线表需求） | 宽带光源、滤光片带通、双通道检测、朗伯-比尔 | `t_ndir_forward / calibrate / invert / selftest` | 全部参数交互获取，无默认仪器 |
 | **CRDS**（腔衰荡） | ✅ 已实现 | hitran（线强/展宽复用）+ 离线降级 | 腔衰荡时间 τ(ν)、镜面反射率 R、ring-down 拟合、有效光程 | `t_crds_simulate / ringdown / invert / selftest` | 同上 |
 | **FTIR**（傅里叶变换红外） | ✅ 已实现 | — | 干涉图、余弦变换、分辨率/切趾函数（boxcar/hamming/blackman_harris）、翼区基线归一、窗旁瓣验证 | `t_ftir_simulate / invert / selftest` | 同上 |
