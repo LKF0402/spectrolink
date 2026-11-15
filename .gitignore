@@ -60,9 +60,13 @@ USAGE.md
 
 # 临时测试脚本（不推远端）
 _fix_*.py
+
 _test_*.py
 _debug_*.py
 _*.py
+
+# 例外：packages 的 __init__.py 必须入库（否则克隆得到 namespace package，与本地漂移）
+!spectrolink_core/__init__.py
 
 # Local config (not for repo)
 config.json
