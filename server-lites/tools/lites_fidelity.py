@@ -37,16 +37,22 @@ import sys
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
-for _p in (str(_ROOT), str(_ROOT / "tools")):
+_REPO = _ROOT.parent
+for _p in (str(_REPO), str(_ROOT), str(_ROOT / "tools")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+
+from spectrolink_core.fidelity import (        # noqa: E402
+    audit_effects as core_audit_effects,
+    fidelity_summary as core_fidelity_summary,
+)
 
 import lites_physics as lph  # noqa: E402
 
 for _s in (sys.stdout, sys.stderr):
     try:
         _s.reconfigure(encoding="utf-8")
-    except Exception:
+    except (AttributeError, ValueError, OSError):   # 已被包装/重定向的流不可重配
         pass
 
 # ══════════════════════════════════════════════════════════════════════
@@ -268,21 +274,7 @@ def _read_sources():
 
 def audit_effects():
     """检查登记表里声称的 evidence 是否真的存在于源码（防"表漂了"）。"""
-    src = _read_sources()
-    blob = "\n".join(src.values())
-    problems = []
-    for e in EFFECTS:
-        if e["status"] == "off":
-            if e["evidence"]:
-                problems.append(f"{e['id']}: 标为未实现，却给了 evidence {e['evidence']}")
-            continue
-        if not e["evidence"]:
-            problems.append(f"{e['id']}: 标为已实现，却没有 evidence（无法自证）")
-            continue
-        for token in e["evidence"]:
-            if token not in blob:
-                problems.append(f"{e['id']}: evidence 未在源码中找到 → {token!r}")
-    return problems
+    return core_audit_effects(EFFECTS, _read_sources())
 
 
 def audit_parameters():
@@ -404,20 +396,7 @@ def missing_effects(statuses=("off",)):
 
 def fidelity_summary():
     """供 MCP 返回给 AI 的结构化保真度报告。"""
-    return {
-        "implemented": [
-            {"id": e["id"], "title": e["title"], "params": e["params"], "limit": e["limit"]}
-            for e in EFFECTS if e["status"] == "on"],
-        "optional": [
-            {"id": e["id"], "title": e["title"], "params": e["params"], "limit": e["limit"]}
-            for e in EFFECTS if e["status"] == "opt"],
-        "not_implemented": [
-            {"id": e["id"], "category": e["cat"], "title": e["title"], "impact": e["limit"]}
-            for e in EFFECTS if e["status"] == "off"],
-        "disclosure_rule": "对任何定量结论，必须告知：① 本次用了哪些已实现效应；"
-                           "② 是否有未实现项会影响该结论（见 not_implemented）；"
-                           "③ 不得把点值当作带误差的结果呈现。",
-    }
+    return core_fidelity_summary(EFFECTS)
 
 
 def main():

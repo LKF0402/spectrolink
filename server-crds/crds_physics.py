@@ -129,6 +129,7 @@ def simulate(L_m: float = 1.0, R: float = 0.999, x: float = 1e-5,
             alpha_pure = [float(__interp(_nu, _alpha, v)) for v in nu]
             src = "hitran"
         except Exception as e:
+            # 刻意宽：HITRAN 无网络/无缓存/无该分子任一失败都降级；disclosure 会写明来源
             disclosure.append(f"HITRAN 不可用（{type(e).__name__}: {str(e)[:120]}）→ 降级为高斯演示谱，非真实谱")
             line_source = "gaussian"
     if alpha_pure is None:

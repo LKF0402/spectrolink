@@ -3,6 +3,18 @@
 本文件以最简形式记录功能演进（不做过程细节罗列）。
 
 ## [Unreleased]
+### 第二十四轮：协议层收敛为单一实现 + 代码卫生
+- 新建 `spectrolink_core/mcp_runtime.py`：`schema_index` / `validate_args` / `make_handle_request` / `serve_stdio`，JSON-RPC 语义只此一份
+- 六个 server 的 `_validate_args` + `handle_request` + stdio 循环删除，改为 `make_handle_request(...)` 绑定 + `serve_stdio`；工具面、`DISPATCH`、`--selftest` 行为不变
+- 行为统一为严格口径：crds/ndir/ftir 此前**不校验必填与未知键**（拼错参数名被静默丢弃、工具照常返回"看起来正常"的结果），doas 此前无批量/通知/校验且能吃位置参数——现全部与 tdlas 同一严格语义
+- 新建 `spectrolink_core/jsonio.py`：`atomic_write_text` 从 `lites_mcp` 与 `tdlas_state` 两份 28 行副本收敛为一份（Windows `os.replace` 重试/降级语义不变）
+- 新建 `spectrolink_core/fidelity.py`：`audit_effects` / `fidelity_summary` 的判定逻辑从 tdlas/lites 两份 fidelity 脚本收敛为一份（各技术只保留 EFFECTS 登记表与薄封装），两套口径不再可能漂移
+- 删除死代码：`tdlas_mcp.apply_contract_blocks`（从未被调用，契约块由各工具手拼、契约自检直接调 `CONTRACT_BLOCK_PRODUCERS` 校验）、`tdlas_constants._MEANINGLESS_NAME_RE`（定义为 None 且全仓无引用）
+- 未用 import 清零：`tdlas_mcp` 去掉 `QUANTITATIVE_BLOCKS` / `_DEVICE_RULES` / `_MEANINGLESS_NAME_RE`（`_WMS_ONLY_KEYS` 保留，契约自检按模块属性读取）
+- 宽异常收窄：可选依赖加载 `ImportError`；`lites_tools` 斜率拟合收窄到 `ValueError/TypeError/LinAlgError`、设备构建收窄到 `TypeError/ValueError`；`tdlas_state._device_provenance` 收窄到 `KeyError/TypeError/ValueError/OSError`；编码重配收窄到 `AttributeError/ValueError/OSError`。产品代码仅剩 6 处刻意宽兜底（HITRAN 降级 ×3、selftest/保真度探针 ×3），均带注释说明
+- 仓库根清理：22 个未跟踪 scratch（`_test_*` / `_plot_*` / `_fix_*`）与 3 个 `.bak` 备份归档到 `tmp/legacy_root/`（仍被 gitignore 覆盖），根目录不再污染
+- 文档同步：README 架构表、TECHNICAL §8「协议层单一实现」
+
 ### 第二十三轮：撤除全部远程能力，项目只做本地 stdio
 - 用户结论：远程那套（HTTP 入口 + cloudflared 隧道 + Bearer 鉴权）留着不好用，且项目定位就是本地给 AI 客户端直接调，故整体移除
 - 删除 `spectrolink_core/http_transport.py`、`spectrolink_core/tunnel.py`、六个 server 的 `tools/remote_link.py`

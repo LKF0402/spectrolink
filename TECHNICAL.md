@@ -498,6 +498,8 @@ out["next_required_actions"] = [
 
 > **运行形态**：六个 server 统一 stdio（本地 MCP 客户端直连），不提供 HTTP 端口 / 公网隧道 / Bearer 鉴权。远程形态已整体移除（CHANGELOG 第二十三轮）。
 
+> **协议层单一实现**：JSON-RPC 解析、批量/通知、`tools/list`/`tools/call`、必填/未知键/类型校验、工具边界异常转错误体、stdio 循环，全部只在 `spectrolink_core/mcp_runtime.py` 定义（`make_handle_request` / `serve_stdio`）。各 server 仅提供 `SERVER_INFO` / `TOOLS` / `DISPATCH` 与 selftest 分支——此前六份各写一套，crds/ndir/ftir 不校验必填与未知键（拼错参数名被静默丢弃），doas 更弱（无批量、无校验）。状态文件原子写同理由 `spectrolink_core/jsonio.py` 提供。
+
 > **Skill 渐进式披露（AI 调度层）**：根 `SKILL.md` 为唯一安装入口（L1），只含技术选择矩阵与自动调度协议；各技术细节（路由表 / 默认披露 / 专属坑点）在 `server-<技术>/SKILL.md`（L2），由 AI 按任务自动读取。披露深度分级：L1 浅（仅选型问答）→ L2 中（调工具 / 定量结果，需 Read 目标 L2）→ L3 深（出图 / 论文数值，展开参数表与 provenance）。用户只需安装根 SKILL 一个技能。
 
 ### 8.1 NDIR（非分散红外，server-ndir）

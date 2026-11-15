@@ -28,7 +28,7 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 
 | 模块 | 作用 |
 |---|---|
-| **spectrolink_core** | 共用物理内核：HITRAN 线表/缓存/指纹、Voigt、线强外推、同位素叠加、Allan/LOD 基座、器件库 schema（独立依赖包，`pip install -e ./spectrolink_core`） |
+| **spectrolink_core** | 共用内核：HITRAN 线表/缓存/指纹、Voigt、线强外推、同位素叠加、Allan/LOD 基座、器件库 schema；**MCP 协议层（stdio JSON-RPC）与状态文件原子写也只此一份**（独立依赖包，`pip install -e ./spectrolink_core`） |
 | **server-tdlas** | TDLAS-DA / TDLAS-WMS 独立 MCP 服务器（工具 `t_*`） |
 | **server-lites** | LITES 独立 MCP 服务器（工具 `l_*`） |
 | **server-ndir** | NDIR（非分散红外）独立 MCP 服务器（工具 `t_ndir_*`） |

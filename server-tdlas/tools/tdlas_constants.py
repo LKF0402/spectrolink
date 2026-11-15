@@ -66,9 +66,6 @@ _DEVICE_SALIENT_KEYS = {
 }
 
 
-_MEANINGLESS_NAME_RE = None
-
-
 EDGE_TECH_NOTE = (
     "真实实验中三角波上升沿与下降沿常不重合，成因："
     "① 激光调谐非线性（注入电流→波长响应并非完美线性）；"
@@ -518,7 +515,6 @@ __all__ = [
     "_INSTR_KEYS",
     "_INSTR_KEYS_WMS",
     "_LASER_ECHO_KEYS",
-    "_MEANINGLESS_NAME_RE",
     "_NO_CONFIRM",
     "_SCENE_DEFAULTS",
     "_SEV_ADVISORY",

@@ -40,10 +40,8 @@ import hashlib
 import io
 import json
 import math
-import os
 import re
 import sys
-import time
 from pathlib import Path
 
 _SRV = Path(__file__).resolve().parent.parent      # server-lites
@@ -68,8 +66,10 @@ OUT_DIR = _ROOT / "tmp" / "mcp_out"   # 与 server-tdlas 共用仓库根输出�
 _HOME = str(Path.home())
 _WS_ROOT = str(_ROOT.parent)
 
-from spectrolink_core.sanitize import make_path_sanitizer    # noqa: E402
-
+from spectrolink_core.jsonio import atomic_write_text as _atomic_write_text   # noqa: E402
+from spectrolink_core.mcp_runtime import (                      # noqa: E402
+    make_handle_request, serve_stdio, validate_args)
+from spectrolink_core.sanitize import make_path_sanitizer       # noqa: E402
 
 _sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
 
@@ -86,36 +86,6 @@ def _load_sessions():
         except (json.JSONDecodeError, OSError):
             return {}
     return {}
-
-
-def _atomic_write_text(path, text, tries=5):
-    """原子写盘：先写同目录临时文件再 os.replace 覆盖（带重试与降级）。
-
-    为什么：会话/设备文件的读-改-写不是原子操作，MCP 崩溃或断电时会留下**半截 JSON**
-    （下次 _load_* 直接 JSONDecodeError → 静默丢失全部已确认工况）。os.replace 在
-    同一文件系统上是原子操作，要么旧内容、要么新内容。
-
-    ⚠ Windows 上的坑（实测）：**两个进程同时写同一个文件**时，`os.replace` 会抛
-    `PermissionError WinError 5`（目标被另一方短暂占用）。多客户端（IDE + CLI）或
-    并行测试都会踩到 → 这里重试几次；仍失败则降级为直接写（放弃原子性，
-    但绝不让一次工具调用因为"写会话状态"而失败）。临时文件名带 pid，避免两进程互相覆盖。
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    tmp.write_text(text, encoding="utf-8")
-    for i in range(tries):
-        try:
-            os.replace(tmp, path)
-            return
-        except PermissionError:
-            time.sleep(0.05 * (i + 1))
-    try:                                   # 兜底：直接写，别把工具调用搞崩
-        path.write_text(text, encoding="utf-8")
-    finally:
-        try:
-            tmp.unlink()
-        except OSError:
-            pass
 
 
 def _save_sessions(sessions):
@@ -1611,120 +1581,28 @@ _SCHEMA_BY_NAME = {t["name"]: t["inputSchema"] for t in TOOLS}
 
 
 def _validate_args(name, args):
-    """按 inputSchema 做轻量校验（未知键 / 必填 / 类型）。返回错误说明，None = 通过。
-
-    为什么必须拦未知键：此前未声明的键被**静默丢弃**，最惨的一次是 schema 声明了
-    `edge`/`trim_frac`/`d2nu_dI2`/`am_*` 而 MCP 层从未透传 → AI 传 edge="falling"
-    得到的是 rising 的结果、返回体里还写着 rising，全程零提示。用户会拿着归因错误的
-    结论去指导真实实验 —— "以为改了、实际没改"比直接报错危险得多。
-    """
-    if not isinstance(args, dict):
-        return "arguments 必须是 JSON 对象"
-    sch = _SCHEMA_BY_NAME.get(name) or {}
-    props = sch.get("properties") or {}
-    missing = [k for k in (sch.get("required") or []) if k not in args]
-    if missing:
-        return f"缺少必填参数：{missing}"
-    unknown = sorted(k for k in args if k not in props)
-    if unknown:
-        return (f"存在未声明的参数：{unknown}；本工具允许的键：{sorted(props)}。"
-                f"（拼写错误会被拒绝而非静默忽略；确需新参数请提 issue）")
-    for k, v in args.items():
-        if v is None:
-            continue
-        want = (props.get(k) or {}).get("type")
-        if want == "number" and (isinstance(v, bool) or not isinstance(v, (int, float))):
-            return f"参数 {k} 期望 number，收到 {type(v).__name__}（{v!r}）"
-        if want == "integer" and (isinstance(v, bool) or not isinstance(v, (int, float))
-                                  or float(v) != int(v)):
-            return f"参数 {k} 期望 integer，收到 {v!r}"
-        if want == "boolean" and not isinstance(v, bool):
-            return f"参数 {k} 期望 boolean，收到 {v!r}"
-        if want == "string" and not isinstance(v, str):
-            return f"参数 {k} 期望 string，收到 {type(v).__name__}"
-    return None
+    """兼容旧引用：转调共用协议层的严格校验（必填 / 未知键 / 类型）。"""
+    return validate_args(_SCHEMA_BY_NAME, name, args)
 
 
 # ───────────────────────── JSON-RPC ─────────────────────────
 
-def handle_request(req):
-    """处理 MCP 请求（initialize / tools/list / tools/call）。
-
-    支持 JSON-RPC 2.0 批量请求（顶层数组）；批量内每个请求独立处理，通知（返回 None）被剔除。
-    """
-    if isinstance(req, list):                     # 批量请求：此前会把 list 当 dict 用 → AttributeError
-        if not req:
-            return {"jsonrpc": "2.0", "id": None,
-                    "error": {"code": -32600, "message": "空批量请求"}}
-        return [r for r in (handle_request(x) for x in req) if r is not None]
-    if not isinstance(req, dict):
-        return {"jsonrpc": "2.0", "id": None,
-                "error": {"code": -32600, "message": "请求必须是 JSON 对象或其数组"}}
-
-    method = req.get("method", "")
-    params = req.get("params") or {}
-    req_id = req.get("id")
-
-    if method == "initialize":
-        return {"jsonrpc": "2.0", "id": req_id, "result": SERVER_INFO}
-    if method in ("notifications/initialized", "initialized"):
-        return None                                  # 通知无需响应
-    if method == "ping":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
-    if method == "tools/list":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}}
-    if method == "tools/call":
-        name = params.get("name")
-        args = params.get("arguments") or {}
-        fn = DISPATCH.get(name)
-        if fn is None:
-            return {"jsonrpc": "2.0", "id": req_id,
-                    "error": {"code": -32601, "message": f"未知工具：{name}"}}
-        bad = _validate_args(name, args)
-        if bad:
-            return {"jsonrpc": "2.0", "id": req_id,
-                    "result": {"content": [{"type": "text", "text": f"参数错误：{bad}"}],
-                               "isError": True}}
-        try:
-            result = fn(**args)
-            return {"jsonrpc": "2.0", "id": req_id,
-                    "result": {"content": [{"type": "text",
-                                            "text": json.dumps(result, ensure_ascii=False,
-                                                               indent=2)}]}}
-        except Exception as e:
-            return {"jsonrpc": "2.0", "id": req_id,
-                    "result": {"content": [{"type": "text",
-                                            "text": f"出错：{type(e).__name__}: {e}"}],
-                               "isError": True}}
-    return {"jsonrpc": "2.0", "id": req_id,
-            "error": {"code": -32601, "message": f"未知方法：{method}"}}
+# 协议语义只由 spectrolink_core.mcp_runtime 定义：批量 / 通知 / 必填 / 未知键 /
+# 类型 / 工具边界异常，六个 server 完全同一口径。
+handle_request = make_handle_request(SERVER_INFO, TOOLS, DISPATCH,
+                                     _SCHEMA_BY_NAME, sanitize=_sanitize_paths)
 
 
 def main():
     # Windows 控制台默认 GBK：协议流必须强制 UTF-8，否则中文会破坏 JSON-RPC
-    for _s in (sys.stdin, sys.stdout, sys.stderr):
-        try:
-            _s.reconfigure(encoding="utf-8")
-        except Exception:
-            pass
     if "--selftest" in sys.argv:
         try:
             print(json.dumps(_sanitize_paths(t_selftest()), ensure_ascii=False, indent=2))
         except ImportError as exc:      # 依赖缺失：给可操作的提示 + 非零退出码（便于 CI 判断）
             sys.stderr.write(f"[lites-mcp] 自检无法运行：{exc}\n")
             raise SystemExit(2)
-        return
-    for line in sys.stdin:                            # stdio 协议循环
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            resp = _sanitize_paths(handle_request(json.loads(line)))
-        except ValueError:                     # JSON 解析失败：不回显 Python 异常文本
-            resp = {"jsonrpc": "2.0", "id": None,
-                    "error": {"code": -32700, "message": "JSON 解析失败（请检查该行是否为合法 JSON 对象）"}}
-        if resp is not None:
-            print(json.dumps(resp, ensure_ascii=False), flush=True)
+        return 0
+    return serve_stdio(handle_request)
 
 
 if __name__ == "__main__":

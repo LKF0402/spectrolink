@@ -35,8 +35,9 @@ SERVER_INFO = {"protocolVersion": PROTOCOL_VERSION,
 _HOME = str(Path.home())
 _WS_ROOT = str(_ROOT.parent)
 
-from spectrolink_core.sanitize import make_path_sanitizer    # noqa: E402
-
+from spectrolink_core.mcp_runtime import (                     # noqa: E402
+    make_handle_request, schema_index, serve_stdio)
+from spectrolink_core.sanitize import make_path_sanitizer      # noqa: E402
 
 _sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
 
@@ -122,64 +123,21 @@ TOOLS = [
 ]
 
 
-# ── MCP 协议层 ────────────────────────────────────────────
+# ── MCP 协议层（共用 spectrolink_core.mcp_runtime）────────────────
 
-def handle_request(req):
-    req_id = req.get("id")
-    method = req.get("method")
-    params = req.get("params") or {}
-    if isinstance(params, list):
-        args, kwargs = (list(params), {})
-    elif isinstance(params, dict):
-        args, kwargs = ([], dict(params))
-    else:
-        args, kwargs = ([], {})
+DISPATCH = {t["name"]: globals()[t["name"]] for t in TOOLS}
+_SCHEMA_BY_NAME = schema_index(TOOLS)
 
-    if method == "initialize":
-        return {"jsonrpc": "2.0", "id": req_id, "result": SERVER_INFO}
-    if method == "ping":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
-    if method == "tools/list":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}}
-    if method == "tools/call":
-        name = kwargs.get("name") or (args[0] if args else "")
-        arguments = kwargs.get("arguments") or {}
-        fn = {"t_doas_forward": t_doas_forward,
-              "t_doas_calibrate": t_doas_calibrate,
-              "t_doas_invert": t_doas_invert,
-              "t_doas_selftest": t_doas_selftest}.get(name)
-        if fn is None:
-            return {"jsonrpc": "2.0", "id": req_id,
-                    "error": {"code": -32601, "message": f"未知工具：{name}"}}
-        try:
-            out = fn(**arguments)
-        except TypeError as exc:
-            return {"jsonrpc": "2.0", "id": req_id, "result": {
-                "content": [{"type": "text", "text": f"参数错误：{exc}"}],
-                "isError": True}}
-        return {"jsonrpc": "2.0", "id": req_id, "result": {
-            "content": [{"type": "text", "text": json.dumps(_sanitize_paths(out), ensure_ascii=False)}]}}
-    return {"jsonrpc": "2.0", "id": req_id,
-            "error": {"code": -32601, "message": f"未知方法：{method}"}}
+# 此前是自写的弱口径：无批量/通知、无必填/未知键/类型校验，还能吃位置参数
+handle_request = make_handle_request(SERVER_INFO, TOOLS, DISPATCH,
+                                     _SCHEMA_BY_NAME, sanitize=_sanitize_paths)
 
 
 def main():
     if "--selftest" in sys.argv:
         sys.stdout.write(json.dumps(_sanitize_paths(dph.selftest()), ensure_ascii=False) + "\n")
         return 0 if dph.selftest()["ok"] else 2
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            req = json.loads(line)
-        except Exception:
-            continue
-        resp = handle_request(req)
-        if resp is not None:
-            sys.stdout.write(json.dumps(resp, ensure_ascii=False) + "\n")
-            sys.stdout.flush()
-    return 0
+    return serve_stdio(handle_request)
 
 
 if __name__ == "__main__":

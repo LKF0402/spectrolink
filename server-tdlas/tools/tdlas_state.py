@@ -10,7 +10,6 @@ import json
 import math
 import os
 import sys
-import time
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
@@ -20,6 +19,7 @@ for _p in (_ROOT, _SRV):
         sys.path.insert(0, str(_p))
 
 import tdlas_sim as ts  # noqa: E402
+from spectrolink_core.jsonio import atomic_write_text as _atomic_write_text  # noqa: E402
 
 from tdlas_constants import (          # noqa: E402
     PARAM_ACQ_GUIDE,
@@ -31,36 +31,6 @@ from tdlas_constants import (          # noqa: E402
 
 _SESSION_FILE = _ROOT / ".tdlas_session.json"
 _DEVICE_FILE = _ROOT / ".tdlas_devices.json"
-
-
-def _atomic_write_text(path, text, tries=5):
-    """原子写盘：先写同目录临时文件再 os.replace 覆盖（带重试与降级）。
-
-    为什么：会话/设备文件的读-改-写不是原子操作，MCP 崩溃或断电时会留下**半截 JSON**
-    （下次 _load_* 直接 JSONDecodeError → 静默丢失全部已确认工况）。os.replace 在
-    同一文件系统上是原子操作，要么旧内容、要么新内容。
-
-    ⚠ Windows 上的坑（实测）：**两个进程同时写同一个文件**时，`os.replace` 会抛
-    `PermissionError WinError 5`（目标被另一方短暂占用）。多客户端（IDE + CLI）或
-    并行测试都会踩到 → 这里重试几次；仍失败则降级为直接写（放弃原子性，
-    但绝不让一次工具调用因为"写会话状态"而失败）。临时文件名带 pid，避免两进程互相覆盖。
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    tmp.write_text(text, encoding="utf-8")
-    for i in range(tries):
-        try:
-            os.replace(tmp, path)
-            return
-        except PermissionError:
-            time.sleep(0.05 * (i + 1))
-    try:                                   # 兜底：直接写，别把工具调用搞崩
-        path.write_text(text, encoding="utf-8")
-    finally:
-        try:
-            tmp.unlink()
-        except OSError:
-            pass
 
 
 def _load_sessions():
@@ -291,5 +261,5 @@ def _device_provenance(setup=None, laser=None, pd=None, daq=None, optics=None):
         raw = _resolve_devices(setup, laser, pd, daq, optics)
         prov = raw.pop("__provenance__", None)
         return prov
-    except Exception:                                      # noqa: BLE001
+    except (KeyError, TypeError, ValueError, OSError):   # 设备库缺项/损坏：来源未知≠崩溃
         return None

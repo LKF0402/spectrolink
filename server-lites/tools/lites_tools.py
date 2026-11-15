@@ -58,7 +58,7 @@ import qtf_eta  # noqa: E402  QTF 全波段吸收率（η_dev 波长化）
 
 try:
     from spectrolink_core import hitran as _hitran
-except Exception:
+except ImportError:                     # 可选依赖：无 numpy/scipy 时降级，不影响纯解析路径
     _hitran = None
 
 
@@ -347,7 +347,7 @@ def lites_sweep(device=lph.DEFAULT_DEVICE, var="power_mW", values=None,
         m = (vv > 0) & (yy > 0)
         if m.sum() >= 3:
             slope = float(np.polyfit(np.log10(vv[m]), np.log10(yy[m]), 1)[0])
-    except Exception:
+    except (ValueError, TypeError, np.linalg.LinAlgError):   # 全零/退化点列：无斜率可算
         slope = None
 
     notes = []
@@ -1125,7 +1125,7 @@ def lites_device(action="list", key=None, overrides=None):
             raise ValueError("action=build 需要 overrides 字典")
         try:
             d = lph.LitesDevice(**overrides)
-        except Exception as e:
+        except (TypeError, ValueError) as e:      # 字段名错 / 数值越界：都属于用户输入问题
             return {"ok": False, "error": f"{type(e).__name__}: {e}",
                     "hint": "可用字段见 lites_device action=get 的字段名",
                     **_block()}

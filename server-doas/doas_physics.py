@@ -27,7 +27,7 @@ import math
 try:
     import numpy as np
     _HAS_NP = True
-except Exception:                                  # pragma: no cover
+except ImportError:                                # pragma: no cover
     _HAS_NP = False
 
 _KB_ERGS = 1.380649e-16        # erg/K（cgs，配合 cm⁻³ 数密度）

@@ -37,8 +37,9 @@ SERVER_INFO = {"protocolVersion": PROTOCOL_VERSION,
 _HOME = str(Path.home())
 _WS_ROOT = str(_ROOT.parent)
 
-from spectrolink_core.sanitize import make_path_sanitizer    # noqa: E402
-
+from spectrolink_core.mcp_runtime import (                     # noqa: E402
+    make_handle_request, schema_index, serve_stdio)
+from spectrolink_core.sanitize import make_path_sanitizer      # noqa: E402
 
 _sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
 
@@ -73,9 +74,9 @@ def _plot_crds(L_m, R, x, nu0, nu_span, n_nu, T, P, species, iso,
                                                step=0.002, wingHW=5.0, iso=iso)
         alpha_pure = np.interp(nu, _nu, _alpha)
         src = "hitran"
-    except Exception:
+    except Exception:      # 刻意宽：HITRAN 无网络/无缓存/无该分子任一失败都走演示谱
         alpha_pure = _gauss(nu, nu0, alpha_pk_fallback, gamma_fallback)
-        src = "gaussian_fallback"
+        src = "gaussian_fallback"          # 返回体 src 会显式标注，不冒充真实谱
     a_pk = float(np.max(alpha_pure))
     tau0 = cph.tau_cavity(L_m, R)
     tau = np.array([cph.tau_with_absorption(L_m, R, a * x) for a in alpha_pure])
@@ -251,82 +252,20 @@ TOOLS = [
 DISPATCH = {t["name"]: globals()[t["name"]] for t in TOOLS}
 
 
-# ── 参数校验 / JSON-RPC（与 server-ndir 同骨架）────────────
+# ── 参数校验 / JSON-RPC（共用 spectrolink_core.mcp_runtime）────────────
 
-_SCHEMA = {}
-for _t in TOOLS:
-    _props = _t["inputSchema"]["properties"]
-    _SCHEMA[_t["name"]] = {k: (v.get("type", "any"), v.get("default"))
-                            for k, v in _props.items()}
+_SCHEMA_BY_NAME = schema_index(TOOLS)
 
-
-def _validate_args(name, args):
-    for k, (want, _) in _SCHEMA.get(name, {}).items():
-        if k not in args:
-            continue
-        v = args[k]
-        if want == "number" and not isinstance(v, (int, float)):
-            return f"参数 {k} 期望 number，收到 {type(v).__name__}"
-        if want == "integer" and (isinstance(v, bool) or not isinstance(v, (int, float))
-                                  or float(v) != int(v)):
-            return f"参数 {k} 期望 integer，收到 {v!r}"
-        if want == "string" and not isinstance(v, str):
-            return f"参数 {k} 期望 string，收到 {type(v).__name__}"
-    return None
-
-
-def handle_request(req):
-    if isinstance(req, list):
-        if not req:
-            return {"jsonrpc": "2.0", "id": None,
-                    "error": {"code": -32600, "message": "空批量请求"}}
-        return [r for r in (handle_request(x) for x in req) if r is not None]
-    if not isinstance(req, dict):
-        return {"jsonrpc": "2.0", "id": None,
-                "error": {"code": -32600, "message": "请求必须是 JSON 对象或其数组"}}
-    method = req.get("method", "")
-    params = req.get("params") or {}
-    req_id = req.get("id")
-    if method == "initialize":
-        return {"jsonrpc": "2.0", "id": req_id, "result": SERVER_INFO}
-    if method in ("notifications/initialized", "initialized"):
-        return None
-    if method == "ping":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
-    if method == "tools/list":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}}
-    if method == "tools/call":
-        name = params.get("name")
-        args = params.get("arguments") or {}
-        fn = DISPATCH.get(name)
-        if fn is None:
-            return {"jsonrpc": "2.0", "id": req_id,
-                    "error": {"code": -32601, "message": f"未知工具：{name}"}}
-        bad = _validate_args(name, args)
-        if bad:
-            return {"jsonrpc": "2.0", "id": req_id,
-                    "result": {"content": [{"type": "text", "text": f"参数错误：{bad}"}],
-                               "isError": True}}
-        try:
-            result = fn(**args)
-            return {"jsonrpc": "2.0", "id": req_id,
-                    "result": {"content": [{"type": "text",
-                                            "text": json.dumps(result, ensure_ascii=False,
-                                                               indent=2)}]}}
-        except Exception as e:
-            return {"jsonrpc": "2.0", "id": req_id,
-                    "result": {"content": [{"type": "text",
-                                            "text": f"出错：{type(e).__name__}: {e}"}],
-                               "isError": True}}
-    return {"jsonrpc": "2.0", "id": req_id,
-            "error": {"code": -32601, "message": f"未知方法：{method}"}}
+# 严格口径（必填 / 未知键 / 类型）与其余 server 完全一致；返回值路径在此脱敏
+handle_request = make_handle_request(SERVER_INFO, TOOLS, DISPATCH,
+                                     _SCHEMA_BY_NAME, sanitize=_sanitize_paths)
 
 
 def main():
     for _s in (sys.stdin, sys.stdout, sys.stderr):
         try:
             _s.reconfigure(encoding="utf-8")
-        except Exception:
+        except (AttributeError, ValueError):
             pass
     if "--selftest" in sys.argv:
         try:
@@ -334,18 +273,8 @@ def main():
         except ImportError as exc:
             sys.stderr.write(f"[crds-mcp] 自检无法运行：{exc}\n")
             raise SystemExit(2)
-        return
-    for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            resp = _sanitize_paths(handle_request(json.loads(line)))
-        except ValueError:
-            resp = {"jsonrpc": "2.0", "id": None,
-                    "error": {"code": -32700, "message": "JSON 解析失败"}}
-        if resp is not None:
-            print(json.dumps(resp, ensure_ascii=False), flush=True)
+        return 0
+    return serve_stdio(handle_request)
 
 
 if __name__ == "__main__":

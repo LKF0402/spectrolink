@@ -30,7 +30,7 @@ import math
 try:
     import numpy as np
     _HAS_NP = True
-except Exception:                                  # pragma: no cover
+except ImportError:                                # pragma: no cover
     _HAS_NP = False
 
 
@@ -132,6 +132,7 @@ def simulate(x=1e-5, L_cm=100.0, nu0=2968.41, nu_span=6.0, n_nu=601,
             alpha_pure = np.interp(nu, np.asarray(_nu), np.asarray(_alpha))
             src = "hitran"
         except Exception as e:
+            # 刻意宽：HITRAN 无网络/无缓存/无该分子任一失败都降级；disclosure 会写明来源
             disclosure.append(f"HITRAN 不可用（{type(e).__name__}: {str(e)[:120]}）→ 降级高斯演示谱")
             alpha_pure = alpha_pk_fallback * np.exp(-((nu - nu0) / gamma_fallback) ** 2)
             src = "gaussian_fallback"

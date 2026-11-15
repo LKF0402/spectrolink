@@ -68,13 +68,11 @@ from tdlas_state import (          # noqa: E402 状态层
 from tdlas_constants import (          # noqa: E402 纯数据常量表
     AI_INTERACTION_GUIDE,
     CLARIFY_QUESTIONS,
-    CONTRACT_BLOCKS,
+    CONTRACT_BLOCKS,                    # 契约自检按 M.CONTRACT_BLOCKS 取，勿删
     EDGE_TECH_NOTE,
     PARAM_ACQ_GUIDE,
-    QUANTITATIVE_BLOCKS,
     SPECIES_PROFILES,
     _ALPHA_CTX_FIELDS,
-    _DEVICE_RULES,
     _DEVICE_SALIENT_KEYS,
     _DEVICE_TYPES,
     _DEVICE_TYPE_CN,
@@ -82,18 +80,19 @@ from tdlas_constants import (          # noqa: E402 纯数据常量表
     _INSTR_KEYS,
     _INSTR_KEYS_WMS,
     _LASER_ECHO_KEYS,
-    _MEANINGLESS_NAME_RE,
     _NO_CONFIRM,
     _SCENE_DEFAULTS,
     _SEV_ADVISORY,
     _SEV_BLOCK,
     _SEV_DISCLOSE,
     _SEV_ORDER,
-    _WMS_ONLY_KEYS,
+    _WMS_ONLY_KEYS,                     # 契约自检按 M._WMS_ONLY_KEYS 取，勿删
     _X_LIST_MAX,
 )
 
-from spectrolink_core.sanitize import make_path_sanitizer    # noqa: E402
+from spectrolink_core.mcp_runtime import (                      # noqa: E402
+    make_handle_request, serve_stdio, validate_args)
+from spectrolink_core.sanitize import make_path_sanitizer       # noqa: E402
 
 # 递归脱敏：把 <workspace> / <home> 绝对路径替换成中性标记（实现见 spectrolink_core）
 _sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
@@ -1512,44 +1511,6 @@ def _validate_any(r):
         return ts.validate_wms_result(r)
     except (KeyError, TypeError, ValueError, AttributeError):   # 结果形状不匹配 = 校验不适用
         return None
-
-
-def apply_contract_blocks(out, tool, session_id="default", extra=None):
-    """按声明把契约块统一装进返回体（显式声明，不做隐式推断）。
-
-    只写入 **非 None** 的值：不能为了"字段齐全"而造出一个看着有、实则空的块，
-    那会比缺失更糟（模型会以为已拥有该信息）。
-    返回：实际写入的块名列表（供契约断言比对）。
-    """
-    meta = {"session_id": session_id, "species": (extra or {}).get("species")}
-    written = []
-    for name in CONTRACT_BLOCKS.get(tool, ()):
-        prod = CONTRACT_BLOCK_PRODUCERS.get(name)
-        if prod is None:
-            continue
-        try:
-            val = prod(out, meta)
-        except (KeyError, TypeError, ValueError, AttributeError, IndexError):   # 数据形状不匹配 → 该块缺席
-            val = None
-        # 假值即缺席（None / False / 空列表 / 空字典）：
-        # 不为"字段齐全"而写一个看着有、实则空的块——那会让模型以为已拥有该信息。
-        if not val:
-            continue
-        out[name] = val
-        written.append(name)
-    # 交互契约需要前面的块已就位才能生成动作清单
-    if "interaction" in (extra or {}):
-        try:
-            inter, acts = _interaction_block(out, tool, session_id)
-            out["interaction"] = inter
-            out["next_required_actions"] = acts
-            written += ["interaction", "next_required_actions"]
-        except (KeyError, TypeError, ValueError, AttributeError, IndexError):   # 同上：不阻断主结果
-            pass
-    if extra and extra.get("clarify") is not None:
-        out["clarify"] = extra["clarify"]
-        written.append("clarify")
-    return written
 
 
 # etalon 条纹相关键：默认不参与"缺省参数确认"（默认关 → 不该反复追问）；
@@ -3379,93 +3340,16 @@ _SCHEMA_BY_NAME = {t["name"]: t["inputSchema"] for t in TOOLS}
 
 
 def _validate_args(name, args):
-    """按 inputSchema 做轻量校验（未知键 / 必填 / 类型）。返回错误说明，None = 通过。
-
-    为什么必须拦未知键：此前未声明的键被**静默丢弃**，最惨的一次是 schema 声明了
-    `edge`/`trim_frac`/`d2nu_dI2`/`am_*` 而 MCP 层从未透传 → AI 传 edge="falling"
-    得到的是 rising 的结果、返回体里还写着 rising，全程零提示。用户会拿着归因错误的
-    结论去指导真实实验 —— "以为改了、实际没改"比直接报错危险得多。
-    """
-    if not isinstance(args, dict):
-        return "arguments 必须是 JSON 对象"
-    sch = _SCHEMA_BY_NAME.get(name) or {}
-    props = sch.get("properties") or {}
-    missing = [k for k in (sch.get("required") or []) if k not in args]
-    if missing:
-        return f"缺少必填参数：{missing}"
-    unknown = sorted(k for k in args if k not in props)
-    if unknown:
-        return (f"存在未声明的参数：{unknown}；本工具允许的键：{sorted(props)}。"
-                f"（拼写错误会被拒绝而非静默忽略；确需新参数请提 issue）")
-    for k, v in args.items():
-        if v is None:
-            continue
-        want = (props.get(k) or {}).get("type")
-        if want == "number" and (isinstance(v, bool) or not isinstance(v, (int, float))):
-            return f"参数 {k} 期望 number，收到 {type(v).__name__}（{v!r}）"
-        if want == "integer" and (isinstance(v, bool) or not isinstance(v, (int, float))
-                                  or float(v) != int(v)):
-            return f"参数 {k} 期望 integer，收到 {v!r}"
-        if want == "boolean" and not isinstance(v, bool):
-            return f"参数 {k} 期望 boolean，收到 {v!r}"
-        if want == "string" and not isinstance(v, str):
-            return f"参数 {k} 期望 string，收到 {type(v).__name__}"
-    return None
+    """兼容旧引用：转调共用协议层的严格校验（必填 / 未知键 / 类型）。"""
+    return validate_args(_SCHEMA_BY_NAME, name, args)
 
 
 # ───────────────────────── JSON-RPC ─────────────────────────
 
-def handle_request(req):
-    """处理 MCP 请求（initialize / tools/list / tools/call）。
-
-    支持 JSON-RPC 2.0 批量请求（顶层数组）；批量内每个请求独立处理，通知（返回 None）被剔除。
-    """
-    if isinstance(req, list):                     # 批量请求：此前会把 list 当 dict 用 → AttributeError
-        if not req:
-            return {"jsonrpc": "2.0", "id": None,
-                    "error": {"code": -32600, "message": "空批量请求"}}
-        return [r for r in (handle_request(x) for x in req) if r is not None]
-    if not isinstance(req, dict):
-        return {"jsonrpc": "2.0", "id": None,
-                "error": {"code": -32600, "message": "请求必须是 JSON 对象或其数组"}}
-
-    method = req.get("method", "")
-    params = req.get("params") or {}
-    req_id = req.get("id")
-
-    if method == "initialize":
-        return {"jsonrpc": "2.0", "id": req_id, "result": SERVER_INFO}
-    if method in ("notifications/initialized", "initialized"):
-        return None                                  # 通知无需响应
-    if method == "ping":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
-    if method == "tools/list":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}}
-    if method == "tools/call":
-        name = params.get("name")
-        args = params.get("arguments") or {}
-        fn = DISPATCH.get(name)
-        if fn is None:
-            return {"jsonrpc": "2.0", "id": req_id,
-                    "error": {"code": -32601, "message": f"未知工具：{name}"}}
-        bad = _validate_args(name, args)
-        if bad:
-            return {"jsonrpc": "2.0", "id": req_id,
-                    "result": {"content": [{"type": "text", "text": f"参数错误：{bad}"}],
-                               "isError": True}}
-        try:
-            result = fn(**args)
-            return {"jsonrpc": "2.0", "id": req_id,
-                    "result": {"content": [{"type": "text",
-                                            "text": json.dumps(result, ensure_ascii=False,
-                                                               indent=2)}]}}
-        except Exception as e:
-            return {"jsonrpc": "2.0", "id": req_id,
-                    "result": {"content": [{"type": "text",
-                                            "text": f"出错：{type(e).__name__}: {e}"}],
-                               "isError": True}}
-    return {"jsonrpc": "2.0", "id": req_id,
-            "error": {"code": -32601, "message": f"未知方法：{method}"}}
+# 协议语义只由 spectrolink_core.mcp_runtime 定义：批量 / 通知 / 必填 / 未知键 /
+# 类型 / 工具边界异常，六个 server 完全同一口径。
+handle_request = make_handle_request(SERVER_INFO, TOOLS, DISPATCH,
+                                     _SCHEMA_BY_NAME, sanitize=_sanitize_paths)
 
 
 def main():
@@ -3481,18 +3365,8 @@ def main():
         except ImportError as exc:      # 依赖缺失：给可操作的提示 + 非零退出码（便于 CI 判断）
             sys.stderr.write(f"[tdlas-mcp] 自检无法运行：{exc}\n")
             raise SystemExit(2)
-        return
-    for line in sys.stdin:                            # stdio 协议循环
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            resp = _sanitize_paths(handle_request(json.loads(line)))
-        except ValueError:                     # JSON 解析失败：不回显 Python 异常文本
-            resp = {"jsonrpc": "2.0", "id": None,
-                    "error": {"code": -32700, "message": "JSON 解析失败（请检查该行是否为合法 JSON 对象）"}}
-        if resp is not None:
-            print(json.dumps(resp, ensure_ascii=False), flush=True)
+        return 0
+    return serve_stdio(handle_request)
 
 
 if __name__ == "__main__":
