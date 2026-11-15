@@ -51,7 +51,7 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 - **AI 交互契约**：返回值携带 `interaction` 与机器可读的 `next_required_actions`——"必须澄清 / 必须披露"由返回值承载
 - **保真度台账**：默认生效 11 项 / 需显式开启 6 项 / **未建模 7 项**，未建模项随结果披露
 - **可信度分层**：10 项物理校验与交互合规**分别**计分
-- **可复现 + 离线门禁**：`seed=0` 逐位可复现；契约自检 189 项与保真度审计均为 CI 硬门禁（不依赖网络）
+- **可复现 + 离线门禁**：`seed=0` 逐位可复现；契约自检 191 项与保真度审计均为 CI 硬门禁（不依赖网络）
 
 其他：`return_xy` 透出锁相 X/Y 用于 RAM/AM 诊断；`tdlas_invert(n_repeats>0)` 给测量不确定度（仅统计分量）；`x_list` 多浓度同图。细节见 [TECHNICAL.md](./TECHNICAL.md) 与 [docs/VALIDATION.md](./docs/VALIDATION.md)。
 

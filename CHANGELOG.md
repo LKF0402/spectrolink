@@ -3,6 +3,12 @@
 本文件以最简形式记录功能演进（不做过程细节罗列）。
 
 ## [Unreleased]
+### 第二十一轮：代码组织重构（收敛重复传输层 + 拆分 tdlas_mcp）
+- 新建 `spectrolink_core/http_transport.py`：MCP Streamable HTTP 传输层与路径脱敏收敛为一份，六个 server 原先各自复制一份 `_run_http`，现统一为薄封装；脱敏大小写口径统一为不敏感
+- `tdlas_mcp.py` 拆出 `tdlas_constants.py`（25 个纯数据常量，零逻辑零包内依赖）与 `tdlas_state.py`（会话/设备库读写）：主文件 4193 → 3547 行，只保留协议与工具层
+- 契约隔离修正：状态文件路径归状态层后，测试隔离必须同时打到 `tdlas_state`，否则会读用户真实设备库、在本地出现假失败；现恢复 191 通过 / 0 失败 / 0 跳过
+- 契约项数口径 189 → 191（README、VALIDATION、ADAPTATION_MATRIX）
+
 ### 第二十轮：全仓口径整改 + 一键接入可跑通
 - 新增 `spectrolink_core/pyproject.toml`：此前 `pip install -e ./spectrolink_core` 直接报 "not a Python project"，README / CI / 一键 prompt 全部卡在这一步
 - README 新增零占位一键接入 prompt（AI 自己 clone / 装依赖 / 写 MCP 配置 / 装 Skill / 自检），快速上手补 `git clone`
