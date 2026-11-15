@@ -35,20 +35,12 @@ SERVER_INFO = {"protocolVersion": PROTOCOL_VERSION,
 _HOME = str(Path.home())
 _WS_ROOT = str(_ROOT.parent)
 
+from spectrolink_core.http_transport import (          # noqa: E402
+    make_path_sanitizer, run_mcp_http)
 
-def _sanitize_paths(obj):
-    if isinstance(obj, str):
-        s = obj
-        if _WS_ROOT and _WS_ROOT.lower() in s.lower():
-            s = s.replace(_WS_ROOT, "<workspace>")
-        if _HOME and _HOME.lower() in s.lower():
-            s = s.replace(_HOME, "<home>")
-        return s
-    if isinstance(obj, list):
-        return [_sanitize_paths(x) for x in obj]
-    if isinstance(obj, dict):
-        return {k: _sanitize_paths(v) for k, v in obj.items()}
-    return obj
+
+
+_sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
 
 
 # ── 工具实现 ──────────────────────────────────────────────

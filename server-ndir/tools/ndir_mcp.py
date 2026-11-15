@@ -35,20 +35,12 @@ SERVER_INFO = {"protocolVersion": PROTOCOL_VERSION,
 _HOME = str(Path.home())
 _WS_ROOT = str(_ROOT.parent)
 
+from spectrolink_core.http_transport import (          # noqa: E402
+    make_path_sanitizer, run_mcp_http)
 
-def _sanitize_paths(obj):
-    if isinstance(obj, str):
-        s = obj
-        if _WS_ROOT and _WS_ROOT.lower() in s.lower():
-            s = s.replace(_WS_ROOT, "<workspace>")
-        if _HOME and _HOME.lower() in s.lower():
-            s = s.replace(_HOME, "<home>")
-        return s
-    if isinstance(obj, list):
-        return [_sanitize_paths(x) for x in obj]
-    if isinstance(obj, dict):
-        return {k: _sanitize_paths(v) for k, v in obj.items()}
-    return obj
+
+
+_sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
 
 
 # ── 工具实现 ──────────────────────────────────────────────
@@ -246,118 +238,9 @@ def main():
 
 
 def _run_http(host, port, token):
-    """MCP Streamable HTTP：同一套 handle_request 暴露为 URL。"""
-    import uuid
-    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-
-    SESSION_ID = uuid.uuid4().hex
-
-    class _Handler(BaseHTTPRequestHandler):
-        protocol_version = "HTTP/1.1"
-
-        def log_message(self, *args):
-            pass
-
-        def _cors(self):
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Headers",
-                             "Content-Type, Authorization, Mcp-Session-Id, Accept")
-            self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-
-        def _auth_ok(self):
-            if not token:
-                return True
-            a = self.headers.get("Authorization", "")
-            return a == f"Bearer {token}" or a == token
-
-        def _send(self, resp):
-            if resp is None:
-                self.send_response(202)
-                self.send_header("Content-Length", "0")
-                self._cors()
-                self.end_headers()
-                return
-            body = json.dumps(resp, ensure_ascii=False).encode("utf-8")
-            use_sse = "text/event-stream" in self.headers.get("Accept", "")
-            self.send_response(200)
-            self.send_header("Mcp-Session-Id", SESSION_ID)
-            self._cors()
-            if use_sse:
-                payload = b"data: " + body + b"\n\n"
-                self.send_header("Content-Type", "text/event-stream")
-                self.send_header("Content-Length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-            else:
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-
-        def _read_body(self):
-            te = (self.headers.get("Transfer-Encoding", "") or "").lower()
-            if "chunked" in te:
-                buf = b""
-                while True:
-                    line = self.rfile.readline().strip()
-                    if not line:
-                        line = self.rfile.readline().strip()
-                    try:
-                        size = int(line.split(b";")[0], 16)
-                    except ValueError:
-                        break
-                    if size == 0:
-                        while True:
-                            h = self.rfile.readline()
-                            if h in (b"\r\n", b""):
-                                break
-                        break
-                    buf += self.rfile.read(size)
-                    self.rfile.readline()
-                return buf
-            try:
-                n = int(self.headers.get("Content-Length", 0))
-            except ValueError:
-                n = 0
-            return self.rfile.read(n) if n > 0 else b""
-
-        def do_OPTIONS(self):
-            self.send_response(204)
-            self._cors()
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-
-        def do_GET(self):
-            self.send_response(405)
-            self.send_header("Allow", "POST")
-            self._cors()
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-
-        def do_POST(self):
-            if self.path not in ("/mcp", "/"):
-                self.send_response(404)
-                self.send_header("Content-Length", "0")
-                self.end_headers()
-                return
-            if not self._auth_ok():
-                err = b'{"jsonrpc":"2.0","id":null,"error":{"code":-32000,"message":"unauthorized"}}'
-                self.send_response(401)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(err)))
-                self.end_headers()
-                self.wfile.write(err)
-                return
-            try:
-                req = json.loads(self._read_body() or b"{}")
-            except Exception as e:
-                self._send({"jsonrpc": "2.0", "id": None,
-                            "error": {"code": -32700, "message": f"解析失败：{e}"}})
-                return
-            self._send(_sanitize_paths(handle_request(req)))
-
-    sys.stderr.write(f"[ndir-mcp] HTTP 模式已启动：http://{host}:{port}/mcp\n")
-    ThreadingHTTPServer((host, port), _Handler).serve_forever()
+    """MCP Streamable HTTP：把同一套 handle_request 暴露为 URL（实现见 spectrolink_core）。"""
+    run_mcp_http(handle_request, host, port, token,
+                 sanitize=_sanitize_paths, server_name="ndir-mcp")
 
 
 if __name__ == "__main__":
