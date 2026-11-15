@@ -2,6 +2,10 @@
 """
 实测基线版 WMS 仿真：用 0 ppm 实测信号做基线，叠加理论吸收。
 
+**MCP 工具已提供同等能力**：`tdlas_baseline_simulate`（参数接受数组而非文件路径，
+并返回 validation / provenance，与其余 15 个工具口径一致）。
+本脚本保留为命令行 / 批处理入口。
+
 用法：
     python simulate_wms_with_baseline.py \
         --species CO --wn_center 2183.22 --x 6e-6 --L 2500 \

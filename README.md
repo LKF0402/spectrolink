@@ -131,6 +131,7 @@ python server-doas/tools/doas_mcp.py --selftest     # DOAS 服务器自检（离
 | 工具 | 功能 |
 |---|---|
 | ⭐ **tdlas_wms_instrument** | **WMS 仪器级仿真首选**：全链路建模，输出标准 3×2 六子图 |
+| ⭐ **tdlas_baseline_simulate** | **实测基线仿真**：0 ppm 氮气实测信号当真实 I0（含 RAM、条纹、漂移），叠加理论吸收 |
 | tdlas_das_instrument | 仪器级 DAS 仿真（DAQ→激光→光路→PD→ADC） |
 | tdlas_simulate | 解析模型正向计算：DAS 透过率、1f、2f 峰高 |
 | tdlas_das_chain | 三角波 DAS 链路：PD 原始信号 → 基线拟合 → 吸光度 |

@@ -12,6 +12,7 @@ description: SpectroLink 子服务器 server-tdlas（L2 参考，AI 自动读取
 | 任务 | 工具 |
 |---|---|
 | WMS 六子图 | `tdlas_wms_instrument` |
+| **实测基线仿真**（0 ppm 氮气背景当真实 I0，叠加理论吸收） | `tdlas_baseline_simulate` |
 | DAS 五子图 | `tdlas_das_instrument` |
 | DAS 链路处理 | `tdlas_das_chain` |
 | 快速算峰高（解析模型，不出图） | `tdlas_simulate` |

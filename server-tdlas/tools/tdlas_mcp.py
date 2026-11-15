@@ -2888,6 +2888,166 @@ def t_wms_instrument(species="CH4", wn_center=2968.5, T=None, P=None, x=None, L_
     return out
 
 
+def t_baseline_simulate(species="CO", wn_center=2183.22, T=296.0, P=1.01325,
+                        x=6e-6, L_cm=2500.0, scan_span_cm=2.0, mod_depth_cm=0.25,
+                        fs=100000.0, fm=1000.0, fscan_Hz=10.0, n_scan_periods=3,
+                        baseline_das=None, baseline_wms=None, save_png=False):
+    """实测基线 WMS 仿真：用 0 ppm（氮气/零气）实测原始信号当 I0，叠加理论吸收。
+
+    与纯理论仿真的区别：I0 不再取理想常数或理论 P-I 模型，而是**你自己的实测背景**，
+    因而保留真实的 AM 残余（RAM）、干涉条纹、探测器响应与基线漂移。
+    这是"免标定"从公式落到实测的第一步：先在零气上量出真实 I0，再把理论吸收叠上去。
+
+    baseline_das : [[wn_cm-1, V], ...]  氮气背景、**不加调制**的 DAS 原始信号
+    baseline_wms : [[t_s, V], ...]      氮气背景、**加调制**的原始信号（含 RAM）
+    两路都可省略；省略的那一路用理想 I0=1（等价于纯理论仿真），并在 validation 里标 warn。
+
+    适用边界：弱吸收（αL ≪ 1）下 2f 才正比于浓度；本工具算 αL_max 并在超限时告警。
+    """
+    import numpy as _np
+
+    for _nm, _v in (("scan_span_cm", scan_span_cm), ("mod_depth_cm", mod_depth_cm),
+                    ("fs", fs), ("fm", fm), ("fscan_Hz", fscan_Hz), ("L_cm", L_cm)):
+        if not (float(_v) > 0):
+            raise ValueError(f"{_nm} 必须 > 0，收到 {_v}")
+    if not (0 < float(x) <= 1):
+        raise ValueError(f"x 必须是 (0,1] 的摩尔分数，收到 {x}")
+
+    def _two_col(arg, name):
+        if arg is None:
+            return None
+        a = _np.asarray(arg, dtype=float)
+        if a.ndim != 2 or a.shape[1] < 2 or a.shape[0] < 8:
+            raise ValueError(f"{name} 需为 [[x,y],...] 两列且 ≥8 点，收到 shape={a.shape}")
+        if not _np.all(_np.isfinite(a[:, :2])):
+            raise ValueError(f"{name} 含非有限值（nan/inf），先清洗数据")
+        return a[:, 0], a[:, 1]
+
+    das_xy = _two_col(baseline_das, "baseline_das")
+    wms_xy = _two_col(baseline_wms, "baseline_wms")
+
+    # ---- 理论吸收 ----
+    _lo = float(wn_center) - float(scan_span_cm) / 2 - 1.0
+    _hi = float(wn_center) + float(scan_span_cm) / 2 + 1.0
+    with _quiet():
+        nu, alpha, info = ts.get_alpha(species, _lo, _hi, float(T), float(P), float(x))
+
+    # ---- 时间轴与瞬时波数（三角波扫描 + 正弦调制）----
+    _fs, _fm, _fsc = float(fs), float(fm), float(fscan_Hz)
+    n_per_scan = max(8, int(round(_fs / _fsc)))
+    n_samples = n_per_scan * int(n_scan_periods)
+    t = _np.arange(n_samples) / _fs
+    wn_scan = float(wn_center) + (float(scan_span_cm) / 2.0) * (2.0 / _np.pi) * \
+        _np.arcsin(_np.sin(2.0 * _np.pi * _fsc * t))
+    nu_t = wn_scan + float(mod_depth_cm) * _np.cos(2.0 * _np.pi * _fm * t)
+
+    # ---- 理论透过率 ----
+    tau_theory = _np.exp(-_np.interp(nu_t, nu, alpha) * float(L_cm))
+
+    # ---- 叠加实测基线（DAS 路按波数插值，WMS 路按时间插值）----
+    if das_xy is not None:
+        I0_das = _np.interp(nu_t, das_xy[0], das_xy[1])
+        if float(_np.mean(I0_das)) <= 0:
+            raise ValueError("baseline_das 均值非正，无法归一化（检查是否全负/全零）")
+        tau_das = I0_das / float(_np.mean(I0_das))
+    else:
+        tau_das = _np.ones_like(t)
+
+    if wms_xy is not None:
+        I0_mod = _np.interp(t, wms_xy[0], wms_xy[1])
+        if float(_np.mean(I0_mod)) <= 0:
+            raise ValueError("baseline_wms 均值非正，无法归一化")
+        I0_mod_norm = I0_mod / float(_np.mean(I0_mod))
+    else:
+        I0_mod_norm = _np.ones_like(t)
+
+    v_adc = I0_mod_norm * tau_theory * tau_das
+
+    # ---- 数字锁相：复用内核，与 t_wms_instrument 同一实现 ----
+    with _quiet():
+        S1f, _, _ = ts.wms_harmonic_lockin(v_adc, t, _fs, _fm, 1)
+        S2f, _, _ = ts.wms_harmonic_lockin(v_adc, t, _fs, _fm, 2)
+
+    # 归一化只在 1f 有意义（≥5% 峰值）的区间成立：无基线/I0 无调制时 1f 接近零，
+    # 逐点相除会在那些点上爆成天文数字（实测踩到 2f/1f≈233 的假峰）。
+    _s1_ref = float(_np.nanmax(S1f)) if _np.isfinite(S1f).any() else 0.0
+    with _np.errstate(divide="ignore", invalid="ignore"):
+        S2f1f = _np.where(S1f > max(0.05 * _s1_ref, 1e-12), S2f / S1f, _np.nan)
+
+    _s2 = float(_np.nanmax(S2f)) if _np.isfinite(S2f).any() else float("nan")
+    _s2n = float(_np.nanmax(S2f1f)) if _np.isfinite(S2f1f).any() else float("nan")
+    _s1 = float(_np.nanmax(S1f)) if _np.isfinite(S1f).any() else float("nan")
+    _al = float(_np.max(_np.interp(nu_t, nu, alpha)) * float(L_cm))
+
+    # ---- 校验：任一 fail 即阻断结论 ----
+    checks, overall = [], "pass"
+
+    def _chk(name, ok, detail, level="fail"):
+        nonlocal overall
+        checks.append({"name": name, "pass": bool(ok), "detail": detail, "level": level})
+        if not ok:
+            overall = "fail" if level == "fail" else ("warn" if overall == "pass" else overall)
+
+    _chk("窗口内有吸收线", int(info.get("n_lines_in_window") or 0) > 0,
+         f"n_lines_in_window={info.get('n_lines_in_window')}")
+    _chk("弱吸收（αL ≪ 1）", _al < 0.1,
+         f"αL_max={_al:.3e}" + ("" if _al < 0.1 else "；已进饱和区，2f 不再正比于浓度"),
+         level="warn")
+    _chk("基线为实测", (das_xy is not None) or (wms_xy is not None),
+         "未提供 baseline_das/baseline_wms → I0 退化为理想 1，结果不等价于实测基线",
+         level="warn")
+    _chk("2f/1f 归一化可用", bool(_np.isfinite(_s2n)), f"S2f1f_peak={_s2n}")
+
+    out = {
+        "ok": overall != "fail",
+        "results": {"S2f_peak": _s2, "S2f1f_peak": _s2n, "S1f_peak": _s1,
+                    "alphaL_max": _al, "n_lines_in_window": info.get("n_lines_in_window")},
+        "validation": {"overall": overall, "checks": checks},
+        "baseline": {"das_given": das_xy is not None, "wms_given": wms_xy is not None,
+                     "das_points": (len(das_xy[0]) if das_xy is not None else 0),
+                     "wms_points": (len(wms_xy[0]) if wms_xy is not None else 0)},
+        "spec": {"species": str(species).upper(), "wn_center_cm-1": float(wn_center),
+                 "T_K": float(T), "P_atm": float(P), "x": float(x), "L_cm": float(L_cm),
+                 "scan_span_cm": float(scan_span_cm), "mod_depth_cm": float(mod_depth_cm),
+                 "fs_Hz": _fs, "fm_Hz": _fm, "fscan_Hz": _fsc,
+                 "n_scan_periods": int(n_scan_periods)},
+    }
+    out["provenance"] = provenance_block(out, info.get("table"))
+    out["note"] = ("实测基线只替换 I0；吸收项仍是 HITRAN 理论值，故本工具输出的是"
+                   "「你的真实光源/探测器 + 理论吸收」的合成结果，不是纯实验数据。")
+
+    if save_png:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as _plt
+        _fig, _ax = _plt.subplots(2, 2, figsize=(11, 7))
+        _ax[0, 0].plot(t * 1e3, v_adc, lw=0.7, color="#0072B2")
+        _ax[0, 0].set_title("原始信号：实测基线 × 理论吸收")
+        _ax[0, 1].plot(wn_scan, S1f, lw=0.8, color="#009E73")
+        _ax[0, 1].set_title("1f 谐波")
+        _ax[1, 0].plot(wn_scan, S2f, lw=0.8, color="#D55E00")
+        _ax[1, 0].set_title("2f 谐波")
+        _ax[1, 1].plot(wn_scan, S2f1f, lw=0.8, color="#CC79A7")
+        _ax[1, 1].set_title("2f/1f 归一化（免标定量）")
+        for _i, (_a, _xl, _yl) in enumerate((
+                (_ax[0, 0], "t (ms)", "PD 信号（归一）"),
+                (_ax[0, 1], "波数 (cm⁻¹)", "S1f"),
+                (_ax[1, 0], "波数 (cm⁻¹)", "S2f"),
+                (_ax[1, 1], "波数 (cm⁻¹)", "2f/1f"))):
+            _a.set_xlabel(_xl)
+            _a.set_ylabel(_yl)
+            _a.grid(alpha=0.25)
+        _fig.suptitle(f"{str(species).upper()} {float(wn_center):.4f} cm⁻¹ 实测基线 WMS · 理论仿真")
+        _fig.tight_layout()
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        _fn = OUT_DIR / (f"baseline_{_safe_name(species)}_"
+                         f"{_safe_name(f'{float(wn_center):.4f}')}cm-1.png")
+        _fig.savefig(_fn, dpi=140)
+        _plt.close(_fig)
+        out["png"] = str(_fn)
+    return out
+
+
 def t_review(species="CH4", wn_center=2968.5, T=None, P=None, x=None, L_cm=None,
              seed=0, session_id="default", x_list=None, return_xy=False, **kw):
     """二次审核 / 多轮核对：跑一遍 WMS 并只返回自动校验报告（不画图）。
@@ -3336,6 +3496,7 @@ DISPATCH = {"tdlas_simulate": t_simulate,
             "tdlas_calibration_curve": t_calibration_curve,
             "tdlas_export": t_export,
             "tdlas_allan": t_allan,
+            "tdlas_baseline_simulate": t_baseline_simulate,
             "tdlas_selftest": t_selftest}
 
 # 混合气多组分声明。四个仿真工具共用同一份定义，避免各写一遍后漂移
@@ -3815,6 +3976,35 @@ TOOLS = [
          "tau_points": {"type": "integer", "description": "τ 轴采样点数（对数均匀，默认 100）"},
          "save_png": {"type": "boolean", "description": "是否出图"}
      }, "required": ["signal", "fs"]}},
+    {"name": "tdlas_baseline_simulate",
+     "description": "实测基线 WMS 仿真：把 0 ppm（氮气/零气）的实测原始信号当 I0 基线，"
+                    "叠加 HITRAN 理论吸收，输出 1f/2f 谐波与 2f/1f。"
+                    "与 tdlas_wms_instrument 的区别：I0 用你的**真实背景**（含 RAM、干涉条纹、"
+                    "探测器响应、基线漂移），而不是理想常数或理论 P-I 模型 —— 这是免标定落地实测的第一步。"
+                    "两路基线都可省略（省略即理想 I0=1，退化为纯理论仿真，validation 会 warn）。"
+                    "弱吸收 αL≪1 时 2f 才正比于浓度；超限会告警。",
+     "inputSchema": {"type": "object", "properties": {
+         "species": {"type": "string", "description": "分子式，如 CO / CH4 / H2O"},
+         "wn_center": {"type": "number", "description": "扫描中心波数 cm^-1"},
+         "T": {"type": "number", "description": "温度 K，默认 296"},
+         "P": {"type": "number", "description": "总压 atm，默认 1.01325"},
+         "x": {"type": "number", "description": "摩尔分数，默认 6e-6（6 ppm）"},
+         "L_cm": {"type": "number", "description": "光程 cm，默认 2500"},
+         "scan_span_cm": {"type": "number", "description": "扫描全宽 cm^-1，默认 2.0"},
+         "mod_depth_cm": {"type": "number", "description": "调制深度 cm^-1，默认 0.25"},
+         "fs": {"type": "number", "description": "采样率 Hz，默认 1e5"},
+         "fm": {"type": "number", "description": "调制频率 Hz，默认 1000"},
+         "fscan_Hz": {"type": "number", "description": "三角波扫描频率 Hz，默认 10"},
+         "n_scan_periods": {"type": "integer", "description": "扫描周期数，默认 3"},
+         "baseline_das": {"type": "array",
+                          "description": "氮气背景、**不加调制**的 DAS 原始信号：[[波数 cm^-1, 电压 V], ...]，≥8 点",
+                          "items": {"type": "array", "items": {"type": "number"}}},
+         "baseline_wms": {"type": "array",
+                          "description": "氮气背景、**加调制**的原始信号（含 RAM）：[[时间 s, 电压 V], ...]，≥8 点",
+                          "items": {"type": "array", "items": {"type": "number"}}},
+         "save_png": {"type": "boolean",
+                      "description": "是否出 4 子图（原始信号 / 1f / 2f / 2f·1f）"}},
+      "required": ["species", "wn_center"]}},
     {"name": "tdlas_selftest",
      "description": "全链路自检。",
      "inputSchema": {"type": "object", "properties": {}}},
