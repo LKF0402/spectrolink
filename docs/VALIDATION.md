@@ -138,7 +138,7 @@
   - 会话文件不可写时降级为"不记账、每次重新下发"，只读安装不会因此让工具调用失败。
   - **CRDS / NDIR / FTIR / DOAS 接入同一交互契约**：四 server 的仪器/分析工具统一由 `spectrolink_core.interaction_server.install_interaction` 包装，动作只取自各自真实字段（`x/x_inferred` 定义域、`x_error_frac`、`ringdown_fit.r2`、`fit.r2`、`r_squared`、`line_source`、`assumptions`、缺输入 `usage`）。`selftest` 不参与、不记账。
   - **NDIR 标定符号修复**：`calibrate()` 的 `r2` 曾按 `y=+A·x` 计算而 `A_fit` 按 `y=-A·x`，默认工况 `r2=-13`、`R0_fit=0.9951`；现统一为 `y=-A·x`，无噪声默认 `r2=1.0 / R0_fit=1.0 / A_match=1.0`，selftest 增加 `r2/R0_fit` 守卫。
-  - **NDIR 反演域校验**：`t_ndir_invert` 默认输入会解出 `x=1.389>1`；现返回 `validation.overall=fail` 并阻断结论，提示检查 `R/R0` 与 `A` 是否同源。
+  - **NDIR 反演域校验**：`ndir_invert` 默认输入会解出 `x=1.389>1`；现返回 `validation.overall=fail` 并阻断结论，提示检查 `R/R0` 与 `A` 是否同源。
   - **DOAS 标定误差口径修复**：`max_abs_err_frac` 曾在 `x=0` 处除以 `max(|x|,1e-30)`，产生 `2.3e10` 虚假巨值；现归一化到浓度满量程，默认 `0.0`，selftest 增加该项守卫。
   - **强吸收/动态范围守卫**：CRDS 的 τ 相对空腔缩短 >50% 判 `warn`、>98% 判 `fail`；FTIR 恢复谱谷值 T<10% 判 `warn`、≤2% 判 `fail`，避免在不可定量区继续给浓度。
 

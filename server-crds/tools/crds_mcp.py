@@ -3,10 +3,10 @@
 """CRDS 仪器级仿真 MCP 服务器（stdio JSON-RPC 2024-11-05）。
 
 工具面：
-  · t_crds_simulate   谱扫描正演：τ(ν) 曲线 + 吸收峰 ring-down 拟合 + 浓度反演
-  · t_crds_ringdown   单点 ring-down 波形生成 + 拟合
-  · t_crds_invert     测量 τ → 浓度（解析）
-  · t_crds_selftest   数值锚点自检（离线）
+  · crds_simulate   谱扫描正演：τ(ν) 曲线 + 吸收峰 ring-down 拟合 + 浓度反演
+  · crds_ringdown   单点 ring-down 波形生成 + 拟合
+  · crds_invert     测量 τ → 浓度（解析）
+  · crds_selftest   数值锚点自检（离线）
 
 纪律：纯标准库 stdio JSON-RPC；参数默认值均为 ai 演示占位，
 真实腔参数（R/L）须用户交互提供。
@@ -163,7 +163,7 @@ def _gauss(nu, nu0, a_pk, gamma):
     return a_pk * gamma ** 2 / ((nu - nu0) ** 2 + gamma ** 2)
 
 
-def t_crds_simulate(L_m=1.0, R=0.999, x=1e-5, nu0=2968.41, nu_span=2.0, n_nu=201,
+def crds_simulate(L_m=1.0, R=0.999, x=1e-5, nu0=2968.41, nu_span=2.0, n_nu=201,
                     T=296.0, P=1.0, species="CH4", line_source="hitran", iso="all",
                     alpha_pk_fallback=13.365, gamma_fallback=0.05,
                     fit_noise=0.0, seed=0, save_png=False,
@@ -203,7 +203,7 @@ def t_crds_simulate(L_m=1.0, R=0.999, x=1e-5, nu0=2968.41, nu_span=2.0, n_nu=201
     return out
 
 
-def t_crds_ringdown(tau_s=3.333e-6, i0=1.0, t_end=2e-5, n_pts=201,
+def crds_ringdown(tau_s=3.333e-6, i0=1.0, t_end=2e-5, n_pts=201,
                     noise_frac=0.0, seed=0):
     """单点 ring-down 波形生成 + 对数线性拟合，返回 τ 估计与 R²。"""
     t = [t_end * i / (n_pts - 1) for i in range(n_pts)]
@@ -227,7 +227,7 @@ def t_crds_ringdown(tau_s=3.333e-6, i0=1.0, t_end=2e-5, n_pts=201,
     return out
 
 
-def t_crds_invert(tau_meas=3.2e-6, L_m=1.0, R=0.999, alpha_pure_pk=13.365):
+def crds_invert(tau_meas=3.2e-6, L_m=1.0, R=0.999, alpha_pure_pk=13.365):
     """测量衰荡时间 → 单程吸收 → 浓度 x = α/α_pure_pk。"""
     alpha = cph.alpha_from_tau(tau_meas, L_m, R)
     x = cph.invert(tau_meas, L_m, R, alpha_pure_pk)
@@ -242,7 +242,7 @@ def t_crds_invert(tau_meas=3.2e-6, L_m=1.0, R=0.999, alpha_pure_pk=13.365):
     return out
 
 
-def t_crds_selftest():
+def crds_selftest():
     """数值锚点自检（离线）。"""
     return cph.selftest()
 
@@ -319,7 +319,7 @@ _SEV_BLOCK = "block_conclusion"
 
 
 TOOLS = [
-    {"name": "t_crds_simulate",
+    {"name": "crds_simulate",
      "description": "CRDS 谱扫描正演：τ(ν) 曲线、吸收峰 ring-down 拟合、浓度反演。line_source=hitran 用 HITRAN 纯组分谱（离线自动降级高斯并披露）。",
      "inputSchema": {"type": "object",
                      "properties": {
@@ -338,7 +338,7 @@ TOOLS = [
                          "gamma_fallback": {"type": "number", "default": 0.05},
                          "fit_noise": {"type": "number", "default": 0.0},
                          "seed": {"type": "integer", "default": 0}}}},
-    {"name": "t_crds_ringdown",
+    {"name": "crds_ringdown",
      "description": "单点 ring-down 波形生成 + 对数线性拟合 → τ 估计。",
      "inputSchema": {"type": "object",
                      "properties": {
@@ -348,7 +348,7 @@ TOOLS = [
                          "n_pts": {"type": "integer", "default": 201},
                          "noise_frac": {"type": "number", "default": 0.0},
                          "seed": {"type": "integer", "default": 0}}}},
-    {"name": "t_crds_invert",
+    {"name": "crds_invert",
      "description": "测量 τ → α = 1/(cτ)−(1−R)/L → 浓度 x = α/α_pure_pk。",
      "inputSchema": {"type": "object",
                      "properties": {
@@ -356,7 +356,7 @@ TOOLS = [
                          "L_m": {"type": "number", "default": 1.0},
                          "R": {"type": "number", "default": 0.999},
                          "alpha_pure_pk": {"type": "number", "description": "纯组分吸收峰 [cm⁻¹]", "default": 13.365}}}},
-    {"name": "t_crds_selftest",
+    {"name": "crds_selftest",
      "description": "CRDS 数值锚点自检（离线）。",
      "inputSchema": {"type": "object", "properties": {}}},
 ]
@@ -365,7 +365,7 @@ DISPATCH = {t["name"]: globals()[t["name"]] for t in TOOLS}
 
 # 仪器/分析工具返回 interaction；selftest 不参与契约、不写会话
 install_interaction(DISPATCH, TOOLS, _SESSION_FILE, _actions,
-                    sev_block=_SEV_BLOCK, skip={"t_crds_selftest"})
+                    sev_block=_SEV_BLOCK, skip={"crds_selftest"})
 
 
 # ── 参数校验 / JSON-RPC（共用 spectrolink_core.mcp_runtime）────────────
@@ -385,7 +385,7 @@ def main():
             pass
     if "--selftest" in sys.argv:
         try:
-            print(json.dumps(_sanitize_paths(t_crds_selftest()), ensure_ascii=False, indent=2))
+            print(json.dumps(_sanitize_paths(crds_selftest()), ensure_ascii=False, indent=2))
         except ImportError as exc:
             sys.stderr.write(f"[crds-mcp] 自检无法运行：{exc}\n")
             raise SystemExit(2)

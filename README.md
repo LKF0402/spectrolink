@@ -4,7 +4,7 @@
 
 <p><b>多技术光谱传感仿真 MCP</b><br>
 TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
-7 种技术 · 6 个 server · 45 个工具 · 自然语言驱动 · 本地 stdio · 无需 API key</p>
+7 种技术 · 6 个 server · 45 个工具（默认启用 TDLAS 17 个，其余按需启用） · 自然语言驱动 · 本地 stdio · 无需 API key</p>
 
 <a href="https://github.com/LKF0402/spectrolink/releases"><img src="https://img.shields.io/github/v/release/LKF0402/spectrolink?color=6B8FD4&label=release" alt="Release"></a>
 <a href="https://github.com/LKF0402/spectrolink/stargazers"><img src="https://img.shields.io/github/stars/LKF0402/spectrolink?color=yellow" alt="Stars"></a>
@@ -39,6 +39,7 @@ TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
 1. 将 https://github.com/LKF0402/spectrolink.git 克隆至固定目录，并确认 Python ≥ 3.10。
 2. 执行 pip install -r requirements.txt 与 pip install -e ./spectrolink_core。
 3. 在 MCP 客户端中仅启用 spectrolink-tdlas：command 使用本机 python 绝对路径，args 使用 server-tdlas/tools/tdlas_mcp.py 的绝对路径。
+   默认启用 TDLAS 的 17 个工具；其余 5 个 server（LITES / NDIR / CRDS / FTIR / DOAS，共 28 个工具）按需启用，避免一次性占用上下文。
 4. 将仓库根目录 SKILL.md 安装为 Skill。
 5. 执行 python server-tdlas/tools/tdlas_mcp.py --selftest。
 完成后请报告安装位置、修改的配置文件及最初三条可用指令；若任一步骤失败，请终止并报告具体环节。
@@ -133,12 +134,12 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 | 模块 | 作用 |
 |---|---|
 | **spectrolink_core** | 共用内核：HITRAN 线表/缓存/指纹、Voigt、线强外推、同位素叠加、Allan/LOD 基座、器件库 schema；**MCP 协议层（stdio JSON-RPC）、状态文件原子写、会话报告块、交互契约记账与保真度判定也只此一份**（独立依赖包，`pip install -e ./spectrolink_core`） |
-| **server-tdlas** | TDLAS-DA / TDLAS-WMS 独立 MCP 服务器（工具 `t_*`） |
+| **server-tdlas** | TDLAS-DA / TDLAS-WMS 独立 MCP 服务器（工具 `tdlas_*`） |
 | **server-lites** | LITES（光热/石英音叉）独立 MCP 服务器（工具 `lites_*`） |
-| **server-ndir** | NDIR（非分散红外）独立 MCP 服务器（工具 `t_ndir_*`） |
-| **server-crds** | CRDS（腔衰荡）独立 MCP 服务器（工具 `t_crds_*`） |
-| **server-ftir** | FTIR（傅里叶变换红外）独立 MCP 服务器（工具 `t_ftir_*`） |
-| **server-doas** | DOAS（差分吸收光谱）独立 MCP 服务器（工具 `t_doas_*`） |
+| **server-ndir** | NDIR（非分散红外）独立 MCP 服务器（工具 `ndir_*`） |
+| **server-crds** | CRDS（腔衰荡）独立 MCP 服务器（工具 `crds_*`） |
+| **server-ftir** | FTIR（傅里叶变换红外）独立 MCP 服务器（工具 `ftir_*`） |
+| **server-doas** | DOAS（差分吸收光谱）独立 MCP 服务器（工具 `doas_*`） |
 
 - 共用 = 独立依赖包，**不是代码拷贝**；core 只放物理量级、不放技术特有假设（锁相、QTF 谐振等留在各 server），一处 bug 只修一处。
 - **按需启用**：每个技术是独立服务器，配置里启哪个加载哪个，控制上下文占用。
@@ -199,16 +200,16 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 
 | 技术 | 工具 | 功能 |
 |---|---|---|
-| **NDIR** | t_ndir_forward | 双通道 Beer-Lambert 正演（lnR → 解析反演 + 3σ 披露） |
-| | t_ndir_calibrate / t_ndir_invert | 浓度标定曲线 / 比值反演 |
-| **CRDS** | t_crds_simulate | 腔衰荡仿真（τ₀、ring-down 波形、有效光程；HITRAN 离线降级） |
-| | t_crds_ringdown / t_crds_invert | ring-down 拟合 / 浓度反演 |
-| **FTIR** | t_ftir_simulate | 干涉图正演（保护带 + 翼区归一 + 切趾 boxcar/hamming/BH + 反演披露） |
-| | t_ftir_invert | 恢复谱数组 → 浓度反演 |
-| **DOAS** | t_doas_forward | UV-Vis 截面正演（慢变背景多项式分离 + 联合最小二乘） |
-| | t_doas_calibrate / t_doas_invert | 标定曲线 / 实测谱反演 |
+| **NDIR** | ndir_forward | 双通道 Beer-Lambert 正演（lnR → 解析反演 + 3σ 披露） |
+| | ndir_calibrate / ndir_invert | 浓度标定曲线 / 比值反演 |
+| **CRDS** | crds_simulate | 腔衰荡仿真（τ₀、ring-down 波形、有效光程；HITRAN 离线降级） |
+| | crds_ringdown / crds_invert | ring-down 拟合 / 浓度反演 |
+| **FTIR** | ftir_simulate | 干涉图正演（保护带 + 翼区归一 + 切趾 boxcar/hamming/BH + 反演披露） |
+| | ftir_invert | 恢复谱数组 → 浓度反演 |
+| **DOAS** | doas_forward | UV-Vis 截面正演（慢变背景多项式分离 + 联合最小二乘） |
+| | doas_calibrate / doas_invert | 标定曲线 / 实测谱反演 |
 
-> NDIR / CRDS / FTIR / DOAS 还各带一个自检工具：`t_ndir_selftest` / `t_crds_selftest` / `t_ftir_selftest` / `t_doas_selftest`，用于改动后一键回归。
+> NDIR / CRDS / FTIR / DOAS 还各带一个自检工具：`ndir_selftest` / `crds_selftest` / `ftir_selftest` / `doas_selftest`，用于改动后一键回归。
 
 </details>
 

@@ -49,7 +49,7 @@ REQS = [
     {"jsonrpc": "2.0", "id": 91, "method": "tools/call",
      "params": {"name": "tdlas_guide", "arguments": {"bogus_key": 1}}},
     {"jsonrpc": "2.0", "id": 92, "method": "tools/call",
-     "params": {"name": "tdlas_simulate", "arguments": {"species": "CH4"}}},
+     "params": {"name": "tdlas_invert", "arguments": {"species": "CH4"}}},
     {"jsonrpc": "2.0", "id": 93, "method": "bad/method"},
 ]
 

@@ -3,10 +3,10 @@
 """NDIR 仪器级仿真 MCP 服务器（stdio JSON-RPC 2024-11-05）。
 
 工具面：
-  · t_ndir_forward     单浓度正演（两通道信号/比值/理论反演）
-  · t_ndir_calibrate   浓度扫描标定曲线（lnR 线性拟合 + R²）
-  · t_ndir_invert      比值 → 浓度解析反演
-  · t_ndir_selftest    数值锚点自检
+  · ndir_forward     单浓度正演（两通道信号/比值/理论反演）
+  · ndir_calibrate   浓度扫描标定曲线（lnR 线性拟合 + R²）
+  · ndir_invert      比值 → 浓度解析反演
+  · ndir_selftest    数值锚点自检
 
 纪律：纯标准库 stdio JSON-RPC；print 只走协议 stdout；
 参数默认值均为 ai 演示占位，真实器件参数须用户交互提供。
@@ -47,7 +47,7 @@ _sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
 
 # ── 工具实现 ──────────────────────────────────────────────
 
-def t_ndir_forward(x=5e-6, L_s_cm=10.0, L_r_cm=10.0, k_s=0.05, k_r=0.001,
+def ndir_forward(x=5e-6, L_s_cm=10.0, L_r_cm=10.0, k_s=0.05, k_r=0.001,
                    i0_s=1.0, i0_r=1.0, noise_frac=0.0, seed=0):
     """单浓度 NDIR 正演。x 为摩尔分数（1e-6=1ppm）。
 
@@ -70,7 +70,7 @@ def t_ndir_forward(x=5e-6, L_s_cm=10.0, L_r_cm=10.0, k_s=0.05, k_r=0.001,
     return out
 
 
-def t_ndir_calibrate(x_min=0.0, x_max=0.01, n=11, L_s_cm=10.0, L_r_cm=10.0,
+def ndir_calibrate(x_min=0.0, x_max=0.01, n=11, L_s_cm=10.0, L_r_cm=10.0,
                      k_s=0.05, k_r=0.001, i0_s=1.0, i0_r=1.0,
                      noise_frac=0.0, seed=0):
     """浓度扫描标定：x_min..x_max 等距 n 点 → R(x) 表 + lnR 线性拟合。"""
@@ -95,7 +95,7 @@ def t_ndir_calibrate(x_min=0.0, x_max=0.01, n=11, L_s_cm=10.0, L_r_cm=10.0,
     return out
 
 
-def t_ndir_invert(R=0.5, R0=1.0, A=0.499):
+def ndir_invert(R=0.5, R0=1.0, A=0.499):
     """比值 → 浓度：x = −ln(R/R0)/A。A = k_s·L_s − k_r·L_r。"""
     x = nph.invert(R, R0, A)
     checks = [
@@ -112,7 +112,7 @@ def t_ndir_invert(R=0.5, R0=1.0, A=0.499):
             "validation": validation_block(checks)}
 
 
-def t_ndir_selftest():
+def ndir_selftest():
     """数值锚点自检（离线，不依赖网络）。"""
     return nph.selftest()
 
@@ -169,7 +169,7 @@ _SEV_BLOCK = "block_conclusion"
 
 
 TOOLS = [
-    {"name": "t_ndir_forward",
+    {"name": "ndir_forward",
      "description": "NDIR 单浓度正演：双通道信号/比值/解析反演。x 为摩尔分数（1e-6=1ppm）。k_s/k_r/L 默认演示占位，真实器件参数须用户提供。",
      "inputSchema": {"type": "object",
                      "properties": {
@@ -182,7 +182,7 @@ TOOLS = [
                          "i0_r": {"type": "number", "default": 1.0},
                          "noise_frac": {"type": "number", "description": "相对高斯噪声 σ", "default": 0.0},
                          "seed": {"type": "integer", "default": 0}}}},
-    {"name": "t_ndir_calibrate",
+    {"name": "ndir_calibrate",
      "description": "NDIR 浓度扫描标定：x_min..x_max 等距 n 点 → R(x) 表 + lnR 线性拟合（A_fit/R0_fit/R²）。",
      "inputSchema": {"type": "object",
                      "properties": {
@@ -197,21 +197,21 @@ TOOLS = [
                          "i0_r": {"type": "number", "default": 1.0},
                          "noise_frac": {"type": "number", "default": 0.0},
                          "seed": {"type": "integer", "default": 0}}}},
-    {"name": "t_ndir_invert",
+    {"name": "ndir_invert",
      "description": "NDIR 比值 → 浓度解析反演：x = -ln(R/R0)/(k_s·L_s−k_r·L_r)。",
      "inputSchema": {"type": "object",
                      "properties": {
                          "R": {"type": "number", "description": "实测两通道比值", "default": 0.5},
                          "R0": {"type": "number", "default": 1.0},
                          "A": {"type": "number", "description": "净吸收积 k_s·L_s−k_r·L_r", "default": 0.499}}}},
-    {"name": "t_ndir_selftest",
+    {"name": "ndir_selftest",
      "description": "NDIR 数值锚点自检（离线）。",
      "inputSchema": {"type": "object", "properties": {}}},
 ]
 
 DISPATCH = {t["name"]: globals()[t["name"]] for t in TOOLS}
 install_interaction(DISPATCH, TOOLS, _SESSION_FILE, _actions,
-                    sev_block=_SEV_BLOCK, skip={"t_ndir_selftest"})
+                    sev_block=_SEV_BLOCK, skip={"ndir_selftest"})
 
 
 # ── 参数校验 / JSON-RPC（共用 spectrolink_core.mcp_runtime）─────────────
@@ -226,7 +226,7 @@ handle_request = make_handle_request(SERVER_INFO, TOOLS, DISPATCH,
 def main():
     if "--selftest" in sys.argv:
         try:
-            print(json.dumps(_sanitize_paths(t_ndir_selftest()), ensure_ascii=False, indent=2))
+            print(json.dumps(_sanitize_paths(ndir_selftest()), ensure_ascii=False, indent=2))
         except ImportError as exc:
             sys.stderr.write(f"[ndir-mcp] 自检无法运行：{exc}\n")
             raise SystemExit(2)

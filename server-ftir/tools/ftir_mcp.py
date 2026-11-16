@@ -3,9 +3,9 @@
 """FTIR 仪器级仿真 MCP 服务器（stdio JSON-RPC 2024-11-05）。
 
 工具面：
-  · t_ftir_simulate   透射谱 → 干涉图 → 切趾恢复 → 分辨率披露 → 浓度反演
-  · t_ftir_invert     恢复透射谱 → 浓度（最小二乘）
-  · t_ftir_selftest   数值锚点自检（离线）
+  · ftir_simulate   透射谱 → 干涉图 → 切趾恢复 → 分辨率披露 → 浓度反演
+  · ftir_invert     恢复透射谱 → 浓度（最小二乘）
+  · ftir_selftest   数值锚点自检（离线）
 
 纪律：纯标准库 stdio JSON-RPC；参数默认值均为 ai 演示占位，
 真实仪器参数（X_max/切趾）须用户交互提供。
@@ -46,7 +46,7 @@ _sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
 
 # ── 工具实现 ──────────────────────────────────────────────
 
-def t_ftir_simulate(x=1e-5, L_cm=100.0, nu0=2968.41, nu_span=6.0, n_nu=601,
+def ftir_simulate(x=1e-5, L_cm=100.0, nu0=2968.41, nu_span=6.0, n_nu=601,
                     x_max=2.0, n_x=401, window="boxcar",
                     T=296.0, P=1.0, species="CH4", line_source="hitran", iso="all",
                     alpha_pk_fallback=13.365, gamma_fallback=0.08,
@@ -80,7 +80,7 @@ def t_ftir_simulate(x=1e-5, L_cm=100.0, nu0=2968.41, nu_span=6.0, n_nu=601,
     return out
 
 
-def t_ftir_invert(t_rec_nu=None, alpha_pure_nu=None, L_cm=100.0):
+def ftir_invert(t_rec_nu=None, alpha_pure_nu=None, L_cm=100.0):
     """恢复透射谱 → 浓度（最小二乘）。t_rec_nu/alpha_pure_nu 为等长数组。
     不传数组时给出用法提示（无内置实测谱，需用户提供）。"""
     if t_rec_nu is None or alpha_pure_nu is None:
@@ -102,7 +102,7 @@ def t_ftir_invert(t_rec_nu=None, alpha_pure_nu=None, L_cm=100.0):
             "validation": validation_block(checks)}
 
 
-def t_ftir_selftest():
+def ftir_selftest():
     """数值锚点自检（离线）。"""
     return fph.selftest()
 
@@ -164,7 +164,7 @@ _SEV_BLOCK = "block_conclusion"
 
 
 TOOLS = [
-    {"name": "t_ftir_simulate",
+    {"name": "ftir_simulate",
      "description": "FTIR 正演：透射谱→干涉图→切趾恢复→分辨率披露→浓度反演。window: boxcar/hamming/blackman_harris。",
      "inputSchema": {"type": "object",
                      "properties": {
@@ -185,7 +185,7 @@ TOOLS = [
                          "gamma_fallback": {"type": "number", "default": 0.08},
                          "noise_frac": {"type": "number", "default": 0.0},
                          "seed": {"type": "integer", "default": 0}}}},
-    {"name": "t_ftir_invert",
+    {"name": "ftir_invert",
      "description": "恢复透射谱 → 浓度最小二乘反演（需用户提供实测恢复谱与纯组分谱数组）。",
      "inputSchema": {"type": "object",
                      "properties": {
@@ -194,14 +194,14 @@ TOOLS = [
                          "alpha_pure_nu": {"type": "array", "items": {"type": "number"},
                                            "description": "纯组分吸收 α(ν) [cm⁻¹] 数组"},
                          "L_cm": {"type": "number", "default": 100.0}}}},
-    {"name": "t_ftir_selftest",
+    {"name": "ftir_selftest",
      "description": "FTIR 数值锚点自检（离线）。",
      "inputSchema": {"type": "object", "properties": {}}},
 ]
 
 DISPATCH = {t["name"]: globals()[t["name"]] for t in TOOLS}
 install_interaction(DISPATCH, TOOLS, _SESSION_FILE, _actions,
-                    sev_block=_SEV_BLOCK, skip={"t_ftir_selftest"})
+                    sev_block=_SEV_BLOCK, skip={"ftir_selftest"})
 
 
 # ── 参数校验 / JSON-RPC（共用 spectrolink_core.mcp_runtime）────────────
@@ -216,7 +216,7 @@ handle_request = make_handle_request(SERVER_INFO, TOOLS, DISPATCH,
 def main():
     if "--selftest" in sys.argv:
         try:
-            print(json.dumps(_sanitize_paths(t_ftir_selftest()), ensure_ascii=False, indent=2))
+            print(json.dumps(_sanitize_paths(ftir_selftest()), ensure_ascii=False, indent=2))
         except ImportError as exc:
             sys.stderr.write(f"[ftir-mcp] 自检无法运行：{exc}\n")
             raise SystemExit(2)

@@ -213,6 +213,7 @@ NON_ENGINE_CHANNELS = {
     "save_png",                                # 绘图开关
     "auto_laser",                              # 目标波数越界时的自动重锚开关
     "x_list",                                  # 多浓度扫描：MCP 层循环驱动，不进引擎（见 _resolve_x_list）
+    "wn0", "L",                                # 旧名别名：入口已归一到 wn_center / L_cm 后再进引擎
 }
 
 

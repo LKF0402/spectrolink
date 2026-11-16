@@ -21,10 +21,10 @@ CRDS 不测透射光强，而测**腔内光子寿命 τ**：
 
 | 任务 | 工具 |
 |---|---|
-| 谱扫描正演：τ(ν) + 吸收峰 ring-down 拟合 + 浓度反演 | `t_crds_simulate` |
-| 单点 ring-down 波形生成 + 对数线性拟合 → τ | `t_crds_ringdown` |
-| 测量 τ → α → 浓度解析反演 | `t_crds_invert` |
-| 数值锚点自检（离线） | `t_crds_selftest` |
+| 谱扫描正演：τ(ν) + 吸收峰 ring-down 拟合 + 浓度反演 | `crds_simulate` |
+| 单点 ring-down 波形生成 + 对数线性拟合 → τ | `crds_ringdown` |
+| 测量 τ → α → 浓度解析反演 | `crds_invert` |
+| 数值锚点自检（离线） | `crds_selftest` |
 
 ## 关键参数（默认演示占位）
 
@@ -48,7 +48,7 @@ CRDS 不测透射光强，而测**腔内光子寿命 τ**：
 
 ## 交互契约
 
-- 仪器/分析工具返回 `interaction` 与 `next_required_actions`：`conclusion_allowed=false` 时不得给出定量结论；`must_disclose` 项须在同一回答说明。`t_crds_selftest` 不返回契约块。
+- 仪器/分析工具返回 `interaction` 与 `next_required_actions`：`conclusion_allowed=false` 时不得给出定量结论；`must_disclose` 项须在同一回答说明。`crds_selftest` 不返回契约块。
 - `validation.overall`：`fail` 不得下结论；`warn`（默认，因演示占位参数）须在回答披露"默认参数为演示占位"。`checks[]` 给出逐项判据（浓度域、反演误差、ring-down R²、谱源）。
 - `line_source=hitran` 但降级为高斯时，`disclosure` 必须原样转述——**降级谱非真实谱，不得当实测谱**。
 

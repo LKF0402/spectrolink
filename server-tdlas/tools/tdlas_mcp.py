@@ -462,6 +462,19 @@ def _resolve_L_alias(L, L_cm):
     return L_cm if L_cm is not None else L
 
 
+def _resolve_wn_alias(wn0, wn_center, default):
+    """兼容旧参数名 wn0 与规范参数名 wn_center（单位均为 cm^-1）。
+
+    两者同时给出且数值不同则明确报错，避免调用方以为改了一个、实际用了另一个。
+    """
+    if wn0 is not None and wn_center is not None and float(wn0) != float(wn_center):
+        raise ValueError(
+            f"wn0 与 wn_center 同时给出但数值不同（wn0={wn0}, wn_center={wn_center}）；"
+            "二者同义，请只保留 wn_center")
+    v = wn_center if wn_center is not None else wn0
+    return float(default if v is None else v)
+
+
 def _resolve_conditions(T, P, x, L_cm, session_id="default", x_default=1e-3, L_default=50.0):
     """工况参数优先级：本次显式给 > 会话已确认 > 默认。
 
@@ -780,19 +793,24 @@ def _build_multi_conc(xs, samples, metric_names, metric_func):
             "response": metrics, "linearity": _linearity_guard(xs, metrics[prim])}
 
 
-def t_simulate(species="H2O", wn0=7185.596, T=None, P=None, x=None, L=None,
+def t_simulate(species="H2O", wn0=None, T=None, P=None, x=None, L=None,
                a=0.10, i0=0.1671, i2=2.48e-3, psi1_pi=1.9356, psi2_pi=4.4138,
                span=0.8, n_scan=401, n_mod=96, sigma_tau=0.0, seed=None,
                save_png=False, session_id="default", x_list=None, mixture=None,
 
-               iso=None, L_cm=None):
+               iso=None, L_cm=None, wn_center=None):
     """DAS + 免标定 WMS 正向仿真：返回 1f、2f 峰高、DAS 最小透过率、线表信息。
 
-    wn0 为目标线中心（cm^-1）；x 为摩尔分数（默认 1e-3 = 1000 ppm，弱吸收）；L 为光程 cm；
-    a 为调制深度 cm^-1。sigma_tau 为等效透过率噪声（默认 0=理想无噪）。save_png=True 时绘图。
+    wn0 为目标线中心（cm^-1，兼容旧名；推荐 wn_center）；x 为摩尔分数（默认 1e-3 = 1000 ppm，弱吸收）；L 为光程 cm；
+    a 为调制深度 cm^-1。sigma_tau 为等效透过率噪声（默认 0=理想无噪）。本工具只算数值，不绘图；
+    需要图像请改用 tdlas_wms_instrument（标准六子图）。
     T/P/x/L 未给出时按「会话已确认 > 默认」取值（复用 tdlas_session 已确认的工况）。
     """
+    wn0 = _resolve_wn_alias(wn0, wn_center, 7185.596)
     L = _resolve_L_alias(L, L_cm)
+    if save_png:
+        raise ValueError("tdlas_simulate 不提供绘图，避免与仪器链六子图混淆；"
+                         "请改用 tdlas_wms_instrument（save_png=true）。")
     if mixture is not None and x_list is not None:
         raise ValueError("mixture（混合气多组分）与 x_list（单物种多浓度）不能同时使用，请二选一")
     _xd, _Ld = _species_defaults(species)
@@ -853,10 +871,11 @@ def t_simulate(species="H2O", wn0=7185.596, T=None, P=None, x=None, L=None,
     return out
 
 
-def t_invert(peak_2f1f, species="H2O", wn0=7185.596, T=None, P=None, L=None,
+def t_invert(peak_2f1f, species="H2O", wn0=None, T=None, P=None, L=None,
              a=0.10, x_ref=None, k=None, i0=0.1671, i2=2.48e-3,
              psi1_pi=1.9356, psi2_pi=4.4138, span=0.8, session_id="default",
-             n_repeats=0, spectrum=None, ref_spectrum=None):
+             n_repeats=0, spectrum=None, ref_spectrum=None,
+             wn_center=None, L_cm=None):
     """免标定浓度反演：由测得的归一化 2f 峰高求摩尔分数 x = peak / k。
 
     k 是**完整链路**灵敏度：优先用调用方传入的 k（来自 tdlas_wms_instrument 返回的
@@ -874,6 +893,8 @@ def t_invert(peak_2f1f, species="H2O", wn0=7185.596, T=None, P=None, L=None,
     返回的 uncertainty 只含统计（随机）分量，不含 k 标定误差、数据库不确定度、
     线型近似等系统项 —— 不得当作总不确定度（见该字段的 scope/note）。
     """
+    wn0 = _resolve_wn_alias(wn0, wn_center, 7185.596)
+    L = _resolve_L_alias(L, L_cm)
     _xd, _Ld = _species_defaults(species)
     T, P, x_ref, L, assumed = _resolve_conditions(T, P, x_ref, L, session_id, x_default=_xd, L_default=_Ld)
     if not 0.0 < float(x_ref) <= 1.0:
@@ -1020,16 +1041,19 @@ def t_invert(peak_2f1f, species="H2O", wn0=7185.596, T=None, P=None, L=None,
     return out
 
 
-def t_detection_limit(species="H2O", wn0=7185.596, T=None, P=None, L=None,
+def t_detection_limit(species="H2O", wn0=None, T=None, P=None, L=None,
                       a=0.10, sigma_tau=1e-5, x_true=None, n_trials=30,
                       n_sigma=3.0, seed=0, i0=0.1671, i2=2.48e-3,
-                      psi1_pi=1.9356, psi2_pi=4.4138, span=0.8, session_id="default"):
+                      psi1_pi=1.9356, psi2_pi=4.4138, span=0.8, session_id="default",
+                      wn_center=None, L_cm=None):
     """检测极限 LOD（最小可测摩尔分数）—— 蒙特卡洛。
 
     sigma_tau 为等效透过率噪声（RIN / 散粒 / 探测器 / 电路的综合，工程上由无吸收基线实测给出）。
     返回噪声等效浓度 NEC 与 LOD = n_sigma × NEC。
     T/P/x_true/L 未给出时按「会话已确认 > 默认」取值。
     """
+    wn0 = _resolve_wn_alias(wn0, wn_center, 7185.596)
+    L = _resolve_L_alias(L, L_cm)
     _xd, _Ld = _species_defaults(species)
     T, P, x_true, L, assumed = _resolve_conditions(T, P, x_true, L, session_id, x_default=_xd, L_default=_Ld)
     i0, i2, p1, p2 = _common(species, wn0, T, P, x_true, L, a, i0, i2, psi1_pi, psi2_pi, span)
@@ -1046,13 +1070,16 @@ def t_detection_limit(species="H2O", wn0=7185.596, T=None, P=None, L=None,
             "needs_confirm": bool(assumed), "log": _sanitize_paths(g.getvalue()).splitlines()}
 
 
-def t_calibration_curve(species="CH4", wn0=2968.5, T=296.0, P=1.01325,
-                        L=10.0, x_list=None, save_png=False):
+def t_calibration_curve(species="CH4", wn0=None, T=296.0, P=1.01325,
+                        L=10.0, x_list=None, save_png=False,
+                        wn_center=None, L_cm=None):
     """标定曲线：扫多个浓度，看 2f 峰高与浓度的线性关系。
 
     x_list: 浓度列表（默认 5 个：0.5x, 1x, 2x, 5x, 10x）
     返回：各浓度 2f 峰高 + 线性拟合 k/R² + 可选绘图
     """
+    wn0 = _resolve_wn_alias(wn0, wn_center, 2968.5)
+    L = _resolve_L_alias(L, L_cm)
     import numpy as np
 
     # 默认浓度列表
@@ -1117,14 +1144,16 @@ def t_calibration_curve(species="CH4", wn0=2968.5, T=296.0, P=1.01325,
     return out
 
 
-def t_detection_limit_scan(species="CH4", wn0=2968.5, T=296.0, P=1.01325, a=0.10,
+def t_detection_limit_scan(species="CH4", wn0=None, T=296.0, P=1.01325, a=0.10,
                            L_list=None, x_list=None, sigma_tau=1e-5, n_trials=10,
-                           n_sigma=3.0, seed=0, save_png=False):
+                           n_sigma=3.0, seed=0, save_png=False,
+                           wn_center=None):
     """检测极限 LOD 随光程 L / 参考浓度 x 的扫描（系统选型：加光程能降多少 LOD）。
 
     弱吸收下 LOD ∝ 1/L（光程加倍、LOD 减半），且 LOD 与参考浓度 x 基本无关，
     直到 αL≳0.1 进入非线性区才略升。返回 LOD 网格（行=浓度 x，列=光程 L）。
     """
+    wn0 = _resolve_wn_alias(wn0, wn_center, 2968.5)
     def _nums(v, default):
         if v is None:
             return default
@@ -1156,17 +1185,18 @@ def t_detection_limit_scan(species="CH4", wn0=2968.5, T=296.0, P=1.01325, a=0.10
     return out
 
 
-def t_das_chain(species="H2O", wn0=7185.596, T=None, P=None, x=None, L=None,
+def t_das_chain(species="H2O", wn0=None, T=None, P=None, x=None, L=None,
                 span=None, fscan=None, fs=None, baseline_slope=None,
                 sigma=0.0, seed=None, fit_order=None, fit_frac=None,
                 edge=None, save_png=False, x_list=None, mixture=None, iso=None,
-                L_cm=None):
+                L_cm=None, wn_center=None):
     """三角波扫描 DAS 全链路：PD 原始信号 → 多项式基线拟合扣除 → DAS 吸光度信号。
 
     默认工况（未显式给出时使用，并列入 assumptions 供复核）：
         **1000 ppm（x=1e-3）、0.5 m 光程（L=50 cm）、296 K、1 atm、上升沿（edge="rising"）**。
     技术知识见返回中的 edge_note（上升/下降沿为何不重合、如何取舍）。
     """
+    wn0 = _resolve_wn_alias(wn0, wn_center, 7185.596)
     L = _resolve_L_alias(L, L_cm)
     if mixture is not None and x_list is not None:
         raise ValueError("mixture（混合气多组分）与 x_list（单物种多浓度）不能同时使用，请二选一")
@@ -1518,10 +1548,11 @@ def _maybe_align_laser(wn_center, inst, explicit_keys, device_used=False):
     return note, info
 
 
-def t_das_instrument(species="CH4", wn_center=2968.5, T=None, P=None, x=None, L_cm=None,
+def t_das_instrument(species="CH4", wn_center=None, T=None, P=None, x=None, L_cm=None,
                      edge=None, fit_order=None, fit_frac=None, seed=0, session_id="default",
                      auto_laser=True, save_png=False, setup=None, laser=None, pd=None, daq=None,
-                     optics=None, x_list=None, mixture=None, iso=None, **kw):
+                     optics=None, x_list=None, mixture=None, iso=None,
+                     wn0=None, L=None, **kw):
     """仪器系统级 DAS 仿真：DAQ 电压 → 激光 → 光路 → PD → ADC 量化 → 基线扣除。
 
     缺省参数按优先级索取：① 用户实测标定值 → ② 器件型号（AI 检索规格书）
@@ -1530,6 +1561,8 @@ def t_das_instrument(species="CH4", wn_center=2968.5, T=None, P=None, x=None, L_
     mixture（可选）：混合气多组分，α=Σ x_i·α_pure_i（"CH4:0.01,CO2:0.04" 或 [{"species","x"}]）；
     与单物种 x 二选一，且不能与 x_list 同用。
     """
+    wn_center = _resolve_wn_alias(wn0, wn_center, 2968.5)
+    L_cm = _resolve_L_alias(L, L_cm)
     if mixture is not None and x_list is not None:
         raise ValueError("mixture（混合气多组分）与 x_list（单物种多浓度）不能同时使用，请二选一")
     given_scene = {"T": T, "P": P, "x": x, "L_cm": L_cm, "edge": edge,
@@ -1709,11 +1742,11 @@ def t_das_instrument(species="CH4", wn_center=2968.5, T=None, P=None, x=None, L_
 # 契约测试 tools/contract_check.py 会做 schema↔透传键的双向核对，防止再次漂移。
 
 
-def t_wms_instrument(species="CH4", wn_center=2968.5, T=None, P=None, x=None, L_cm=None,
+def t_wms_instrument(species="CH4", wn_center=None, T=None, P=None, x=None, L_cm=None,
                      seed=0, session_id="default", auto_laser=True, save_png=False,
                      return_xy=False, x_list=None,
                      setup=None, laser=None, pd=None, daq=None, optics=None, mixture=None,
-                     iso=None, **kw):
+                     iso=None, wn0=None, L=None, **kw):
     """WMS 仪器链路仿真：三角波扫描 + 正弦调制 → 激光 → 光路 → PD → ADC → 数字锁相（2f/1f）。
 
     调制幅值默认按**最优调制系数 m≈2.2** 自动优化（2f 峰值最大处）。
@@ -1721,6 +1754,8 @@ def t_wms_instrument(species="CH4", wn_center=2968.5, T=None, P=None, x=None, L_
     mixture（可选）：混合气多组分，α=Σ x_i·α_pure_i（"CH4:0.01,CO2:0.04" 或 [{"species","x"}]）；
     与单物种 x 二选一，不能与 x_list 同用；给定时 species 仅作标签。各组分 αL 叠加在标准图的 αL 面板。
     """
+    wn_center = _resolve_wn_alias(wn0, wn_center, 2968.5)
+    L_cm = _resolve_L_alias(L, L_cm)
     if mixture is not None and x_list is not None:
         raise ValueError("mixture（混合气多组分）与 x_list（单物种多浓度）不能同时使用，请二选一")
     import numpy as np
@@ -2819,25 +2854,55 @@ _MIXTURE_PROP = {
     ],
 }
 
+# 多浓度列表：服务端同时支持 JSON 数组与逗号分隔字符串；schema 必须同步声明，
+# 否则按 schema 生成表单的客户端会在本地拒绝文档允许的字符串写法。
+_X_LIST_PROP = {
+    "description": "多浓度扫描：摩尔分数列表 (0,1]，如 [1e-4,1e-3,1e-2]，与 x 二选一；"
+                   "也接受逗号分隔字符串 '1e-4,1e-3'。开启后返回 multi_conc 扫描曲线 + "
+                   "线性/饱和防呆诊断（响应/浓度 偏离线性 >10% 即提示进非线性区）。"
+                   "防呆：空/越界/超 64 点会被拒绝，自动去重并升序；"
+                   "save_png=true 时额外输出 png_overlay（多浓度同图）。",
+    "anyOf": [
+        {"type": "array", "items": {"type": "number"}},
+        {"type": "string"},
+    ],
+}
+
+# 同位素模式：不传=主同位素；"all"=全部同位素按丰度叠加；整数=指定同位素编号。
+_ISO_PROP = {
+    "description": "同位素模式：默认不传=主同位素（历史口径）；\"all\"=该分子全部 HITRAN "
+                   "同位素按丰度叠加（密集谱区 ¹³CH₄ 等邻近线贡献不可忽略，峰形更贴近实测）；"
+                   "整数=指定同位素编号。",
+    "anyOf": [
+        {"type": "string", "enum": ["all"]},
+        {"type": "integer"},
+    ],
+}
+
+# 调制系数：auto=自适应粗扫+细扫；数值=固定 m。
+_M_OPT_PROP = {
+    "description": "调制系数 m=a/HWHM；\"auto\"（默认）=自适应（粗扫+细扫，兼顾 2f 幅值与轮廓，"
+                   "密集谱区自动选更小 m）；或给数值（如 2.2）禁用自适应。",
+    "anyOf": [
+        {"type": "string", "enum": ["auto"]},
+        {"type": "number"},
+    ],
+}
+
 TOOLS = [
     {"name": "tdlas_simulate",
-     "description": "【快速算数值】TDLAS/WMS 解析模型：返回 DAS 透过率、1f/2f 峰高。要画图请用 tdlas_wms_instrument。"
-                    "save_png=True 仅出 3 子图简图（DAS/2f/2f/1f），无仪器链路。"
-                    "⚠️ 用户要画 WMS 图、要看 2f/1f 曲线、要仪器级仿真时，必须改用 tdlas_wms_instrument（标准6子图）。"
-                    "本工具仅用于快速算峰高数值或解析对照。",
+     "description": "【快速算数值】TDLAS/WMS 解析模型：返回 DAS 透过率、1f/2f 峰高。"
+                    "本工具只算数值，不提供绘图；需要 WMS 图、2f/1f 曲线或仪器级仿真时，"
+                    "统一改用 tdlas_wms_instrument（标准六子图）。",
      "inputSchema": {"type": "object",
                      "properties": {
                          "species": {"type": "string", "description": "分子式，如 H2O / CO2 / CO"},
-                         "wn0": {"type": "number", "description": "目标线中心 cm^-1"},
+                         "wn0": {"type": "number", "description": "目标线中心 cm^-1（兼容旧名；推荐 wn_center）；缺省 H2O 7185.596"},
+                         "wn_center": {"type": "number", "description": "目标线中心 cm^-1（规范名，与 wn0 二选一）"},
                          "T": {"type": "number", "description": "温度 K；缺省=会话已确认或 296"},
                          "P": {"type": "number", "description": f"气压 atm；缺省=会话已确认或 {_SCENE_DEFAULTS['P']:g}"},
                          "x": {"type": "number", "description": "摩尔分数 (0,1]；缺省=会话已确认或按物种推荐（强吸收如 CH4≈1e-4）"},
-                         "x_list": {"type": "array", "items": {"type": "number"},
-                                    "description": "多浓度扫描：摩尔分数列表 (0,1]，如 [1e-4,1e-3,1e-2]，与 x 二选一；"
-                                                   "开启后返回 multi_conc 扫描曲线 + 线性/饱和防呆诊断"
-                                                   "（响应/浓度 偏离线性 >10% 即提示进非线性区）。"
-                                                   "防呆：空/越界/超 64 点会被拒绝，自动去重并升序；也接受 '1e-4,1e-3' 字符串。"
-                                                   "save_png=true 时额外输出 png_overlay（多浓度同图，兼容性操作，用于混合气/标定对照）。"},
+                         "x_list": _X_LIST_PROP,
                          "mixture": _MIXTURE_PROP,
                          "L": {"type": "number", "description": "光程 cm（兼容旧名；推荐用 L_cm。注意单位是 cm，不是 m）；缺省=会话已确认，否则按物种推荐（CH4 100 / CO2 30 / H2O 50）"},
                          "L_cm": {"type": "number", "description": "光程 cm（推荐；与 L 同义，二选一。注意单位是 cm，不是 m）；缺省=会话已确认，否则按物种推荐"},
@@ -2849,9 +2914,10 @@ TOOLS = [
                          "n_scan": {"type": "integer"}, "n_mod": {"type": "integer"},
                          "sigma_tau": {"type": "number", "description": "等效透过率噪声，默认 0"},
                          "seed": {"type": "integer"},
-                         "iso": {"type": "string", "description": "同位素模式：默认不传=主同位素（历史口径）；\"all\"=该分子全部 HITRAN 同位素按丰度叠加（密集谱区 ¹³CH₄ 等邻近线贡献不可忽略，峰形更贴近实测）；整数=指定同位素编号。"},
-                         "save_png": {"type": "boolean", "description": "是否绘图，默认 False"}},
-                     "required": ["species", "wn0"]}},
+                         "iso": _ISO_PROP,
+                         "save_png": {"type": "boolean",
+                                      "description": "已停用：传 true 会报错并提示改用 tdlas_wms_instrument（六子图），不再输出三子图简图"}},
+                     "required": ["species"]}},
     {"name": "tdlas_das_chain",
      "description": "DAS 时域链路：PD 原始信号 → 基线拟合 → 吸光度。"
                     "对应真实 DAS 实验处理流程。默认工况：1000 ppm / 0.5 m 光程 / 296 K / 1 atm / "
@@ -2861,16 +2927,12 @@ TOOLS = [
      "inputSchema": {"type": "object",
                      "properties": {
                          "species": {"type": "string", "description": "分子式，如 CH4 / H2O / CO2"},
-                         "wn0": {"type": "number", "description": "扫描中心波数 cm^-1"},
+                         "wn0": {"type": "number", "description": "扫描中心波数 cm^-1（兼容旧名；推荐 wn_center）"},
+                         "wn_center": {"type": "number", "description": "扫描中心波数 cm^-1（规范名，与 wn0 二选一）"},
                          "T": {"type": "number", "description": "温度 K，默认 296"},
                          "P": {"type": "number", "description": "气压 atm，默认 1.01325"},
                          "x": {"type": "number", "description": "摩尔分数，默认 1e-3（1000 ppm）"},
-                         "x_list": {"type": "array", "items": {"type": "number"},
-                                    "description": "多浓度扫描：摩尔分数列表 (0,1]，如 [1e-4,1e-3,1e-2]，与 x 二选一；"
-                                                   "开启后返回 multi_conc 扫描曲线 + 线性/饱和防呆诊断"
-                                                   "（响应/浓度 偏离线性 >10% 即提示进非线性区）。"
-                                                   "防呆：空/越界/超 64 点会被拒绝，自动去重并升序；也接受 '1e-4,1e-3' 字符串。"
-                                                   "save_png=true 时额外输出 png_overlay（多浓度同图，兼容性操作，用于混合气/标定对照）。"},
+                         "x_list": _X_LIST_PROP,
                          "mixture": _MIXTURE_PROP,
                          "L": {"type": "number", "description": "光程 cm（兼容旧名；推荐用 L_cm。注意单位是 cm，不是 m）；默认 50（0.5 m）"},
                          "L_cm": {"type": "number", "description": "光程 cm（推荐；与 L 同义，二选一）；默认 50（0.5 m）"},
@@ -2886,10 +2948,10 @@ TOOLS = [
                          "edge": {"type": "string",
                                   "description": "取哪一段作 DAS：rising(默认,上升沿) / falling / "
                                                  "average(两段平均) / both(对照两段)"},
-                         "iso": {"type": "string", "description": "同位素模式：默认不传=主同位素（历史口径）；\"all\"=该分子全部 HITRAN 同位素按丰度叠加（密集谱区 ¹³CH₄ 等邻近线贡献不可忽略，峰形更贴近实测）；整数=指定同位素编号。"},
+                         "iso": _ISO_PROP,
                          "save_png": {"type": "boolean",
                                       "description": "是否出四层链路图（含上升/下降沿对照）"}},
-                     "required": ["species", "wn0"]}},
+                     "required": ["species"]}},
     {"name": "tdlas_das_instrument",
      "description": "DAS 仪器级仿真：DAQ 电压 → 激光 → 光路 → PD → ADC。"
                     "→ PD 光电转换（响应度/跨阻增益/带宽/噪声）→ ADC 量化（位数/量程/饱和）→ 基线扣除。"
@@ -2903,17 +2965,14 @@ TOOLS = [
                      "properties": {
                          "species": {"type": "string", "description": "分子式，默认 CH4"},
                          "wn_center": {"type": "number", "description": "扫描中心波数 cm^-1，默认 2968.5"},
+                         "wn0": {"type": "number", "description": "扫描中心波数 cm^-1（兼容旧名；与 wn_center 二选一）"},
                          "T": {"type": "number", "description": "温度 K，默认 296"},
                          "P": {"type": "number", "description": "气压 atm，默认 1.01325"},
                          "x": {"type": "number", "description": "摩尔分数，默认 1e-3（1000 ppm）"},
-                         "x_list": {"type": "array", "items": {"type": "number"},
-                                    "description": "多浓度扫描：摩尔分数列表 (0,1]，如 [1e-4,1e-3,1e-2]，与 x 二选一；"
-                                                   "开启后返回 multi_conc 扫描曲线 + 线性/饱和防呆诊断"
-                                                   "（响应/浓度 偏离线性 >10% 即提示进非线性区）。"
-                                                   "防呆：空/越界/超 64 点会被拒绝，自动去重并升序；也接受 '1e-4,1e-3' 字符串。"
-                                                   "save_png=true 时额外输出 png_overlay（多浓度同图，兼容性操作，用于混合气/标定对照）。"},
+                         "x_list": _X_LIST_PROP,
                          "mixture": _MIXTURE_PROP,
                          "L_cm": {"type": "number", "description": "光程 cm，默认 50"},
+                         "L": {"type": "number", "description": "光程 cm（兼容旧名；与 L_cm 二选一）"},
                          "scan_span_cm": {"type": "number", "description": "三角波扫描半宽 cm⁻¹，默认 1.5（amp_V 由它自动反算，一般无需手填）"},
                          "amp_V": {"type": "number", "description": "三角波幅值 V（**通常无需手填**：由 wn_center+scan_span_cm 自动反算；需固定电压时覆盖）"},
                          "freq_Hz": {"type": "number", "description": "三角波频率 Hz，默认 100"},
@@ -2971,35 +3030,31 @@ TOOLS = [
                                                "description": "明知扫描段有暗区（激光在该电压段未出光）仍要计算，默认 False。"
                                                               "暗区 PD 信号为 0、锁相波形被截断 → 2f/1f 失真、**定量结论不可用**；"
                                                               "仅在诊断「扫描越界后长什么样」时开启（开启后 warnings 会报出暗区占比）"},
-                         "iso": {"type": "string", "description": "同位素模式：默认不传=主同位素（历史口径）；\"all\"=该分子全部 HITRAN 同位素按丰度叠加（密集谱区 ¹³CH₄ 等邻近线贡献不可忽略，峰形更贴近实测）；整数=指定同位素编号。"},
+                         "iso": _ISO_PROP,
                          "save_png": {"type": "boolean", "description": "是否出五层链路图"}},
-                         "required": ["species", "wn_center"]}},
+                         "required": []}},
                          {"name": "tdlas_wms_instrument",
      "description": "【核心】WMS 仪器级仿真：扫描+调制 → 锁相 → 1f/2f/归一化（六子图）。",
      "inputSchema": {"type": "object",
                      "properties": {
                          "species": {"type": "string", "description": "分子式，默认 CH4"},
                          "wn_center": {"type": "number", "description": "扫描中心波数 cm^-1，默认 2968.5"},
+                         "wn0": {"type": "number", "description": "扫描中心波数 cm^-1（兼容旧名；与 wn_center 二选一）"},
                          "T": {"type": "number"}, "P": {"type": "number"},
                          "x": {"type": "number", "description": "摩尔分数，默认 1e-3"},
-                         "x_list": {"type": "array", "items": {"type": "number"},
-                                    "description": "多浓度扫描：摩尔分数列表 (0,1]，如 [1e-4,1e-3,1e-2]，与 x 二选一；"
-                                                   "开启后返回 multi_conc 扫描曲线 + 线性/饱和防呆诊断"
-                                                   "（响应/浓度 偏离线性 >10% 即提示进非线性区）。"
-                                                   "防呆：空/越界/超 64 点会被拒绝，自动去重并升序；也接受 '1e-4,1e-3' 字符串。"
-                                                   "save_png=true 时额外输出 png_overlay（多浓度同图，兼容性操作，用于混合气/标定对照）。"},
+                         "x_list": _X_LIST_PROP,
                          "mixture": _MIXTURE_PROP,
                          "return_xy": {"type": "boolean",
                                        "description": "是否返回锁相正交分量 X/Y（信号支路 X1f_c/Y1f_c/X2f_c/Y2f_c "
                                                       "与无吸收参考谱 X1f_bg_c/…）。默认 false：每次返回多 8 条等长数组，"
                                                       "会显著增大返回体。需自行做 2f/1f 复减或诊断 RAM/AM 基线时再开。"},
                          "L_cm": {"type": "number", "description": "光程 cm，默认 50"},
+                         "L": {"type": "number", "description": "光程 cm（兼容旧名；与 L_cm 二选一）"},
                          "scan_span_cm": {"type": "number", "description": "三角波扫描半宽 cm⁻¹，默认 1.5（amp_V 由它自动反算，一般无需手填）"},
                          "mod_freq_Hz": {"type": "number", "description": "正弦调制频率 Hz，默认 30000"},
                          "mod_amp_V": {"type": "number",
                                        "description": "调制幅值 V；缺省=按 m≈2.2 自动优化"},
-                         "m_opt": {"description": "调制系数 m=a/HWHM；'auto'(默认)=自适应(粗扫+细扫，"
-                                                   "兼顾2f幅值与轮廓，密集谱区自动选更小m)；或给数值(如2.2)禁用自适应"},
+                         "m_opt": _M_OPT_PROP,
                          "lockin_avg": {"type": "integer",
                                         "description": "锁相平均调制周期数，默认 1（>1 模糊线形且不降残留）"},
                          "lockin_stages": {"type": "integer",
@@ -3071,9 +3126,9 @@ TOOLS = [
                                                 "description": "明知扫描段有暗区（激光在该电压段未出光）仍要计算，默认 False。"
                                                                "暗区 PD 信号为 0、锁相波形被截断 → 2f/1f 失真、**定量结论不可用**；"
                                                                "仅在诊断「扫描越界后长什么样」时开启（开启后 warnings 会报出暗区占比）"},
-                         "iso": {"type": "string", "description": "同位素模式：默认不传=主同位素（历史口径）；\"all\"=该分子全部 HITRAN 同位素按丰度叠加（密集谱区 ¹³CH₄ 等邻近线贡献不可忽略，峰形更贴近实测）；整数=指定同位素编号。"},
+                         "iso": _ISO_PROP,
                          "save_png": {"type": "boolean", "description": "是否出六子图"}},
-                         "required": ["species", "wn_center"]}},
+                         "required": []}},
                          {"name": "tdlas_review",
      "description": "二次审核：自动校验报告（9 项，不画图）。"
                     "用于在给出最终结论前对结果做独立复核；非专业用户据此判断结果是否可信。"
@@ -3197,8 +3252,11 @@ TOOLS = [
                                                      "注意：**不是** S2f1f_peak —— 仅当归一化方法为 2f/1f 时"
                                                      "两者才相等，退化为 2f/I0 时用它会把浓度算错"},
                          "species": {"type": "string"}, "wn0": {"type": "number"},
+                         "wn_center": {"type": "number", "description": "扫描中心波数 cm^-1（规范名，与 wn0 二选一）"},
                          "T": {"type": "number"}, "P": {"type": "number"},
-                         "L": {"type": "number"}, "a": {"type": "number"},
+                         "L": {"type": "number", "description": "光程 cm（兼容旧名；推荐 L_cm）"},
+                         "L_cm": {"type": "number", "description": "光程 cm（规范名，与 L 二选一）"},
+                         "a": {"type": "number"},
                          "x_ref": {"type": "number", "description": "参考浓度；缺省=会话已确认或按物种推荐"},
                          "k": {"type": "number", "description": "完整链路灵敏度（来自 tdlas_wms_instrument.sensitivity_k）；不给则内部重算"},
                          "session_id": {"type": "string", "description": "会话标识，默认 default（复用已确认 T/P/x/L）"},
@@ -3216,14 +3274,17 @@ TOOLS = [
                                                          "缺省时内部跑一次（同工况，但采样必须一致）"},
                          "n_repeats": {"type": "integer",
                                        "description": "测量不确定度：同工况重复仿真次数（默认 0=不算）。建议 ≥10 才可引用；耗时 ≈ n_repeats × 单次链路。只含统计（随机）分量，系统项未计入"}},
-                     "required": ["peak_2f1f", "species", "wn0"]}},
+                     "required": ["peak_2f1f", "species"]}},
     {"name": "tdlas_detection_limit",
      "description": "检测限：噪声 → NEC / LOD。",
      "inputSchema": {"type": "object",
                      "properties": {
                          "species": {"type": "string"}, "wn0": {"type": "number"},
+                         "wn_center": {"type": "number", "description": "扫描中心波数 cm^-1（规范名，与 wn0 二选一）"},
                          "T": {"type": "number"}, "P": {"type": "number"},
-                         "L": {"type": "number"}, "a": {"type": "number"},
+                         "L": {"type": "number", "description": "光程 cm（兼容旧名；推荐 L_cm）"},
+                         "L_cm": {"type": "number", "description": "光程 cm（规范名，与 L 二选一）"},
+                         "a": {"type": "number"},
                          "sigma_tau": {"type": "number", "description": "等效透过率噪声，默认 1e-5"},
                          "x_true": {"type": "number", "description": "用于统计的真值浓度；缺省=会话已确认或 1e-3"},
                          "n_trials": {"type": "integer", "description": "蒙特卡洛次数，默认 30"},
@@ -3235,14 +3296,15 @@ TOOLS = [
                          "psi1_pi": {"type": "number", "description": "【遗留参数】完整链路下不生效"},
                          "psi2_pi": {"type": "number", "description": "【遗留参数】完整链路下不生效"},
                          "seed": {"type": "integer"}},
-                         "required": ["species", "wn0"]}},
+                         "required": ["species"]}},
                          {"name": "tdlas_detection_limit_scan",
      "description": "检测限扫描：LOD 随光程/浓度的网格（选型用）。"
                     "弱吸收下 LOD∝1/L，且与参考浓度基本无关；返回 LOD 网格（行=浓度 x，列=光程 L）。",
      "inputSchema": {"type": "object",
                      "properties": {
                          "species": {"type": "string", "description": "分子式，默认 CH4"},
-                         "wn0": {"type": "number", "description": "目标线中心 cm^-1，默认 2968.5"},
+                         "wn0": {"type": "number", "description": "目标线中心 cm^-1，默认 2968.5（兼容旧名；推荐 wn_center）"},
+                         "wn_center": {"type": "number", "description": "目标线中心 cm^-1（规范名，与 wn0 二选一）"},
                          "T": {"type": "number"}, "P": {"type": "number"},
                          "a": {"type": "number", "description": "调制深度 cm^-1，默认 0.1"},
                          "L_list": {"type": "array", "items": {"type": "number"},
@@ -3258,13 +3320,15 @@ TOOLS = [
      "description": "标定曲线：浓度 vs 2f/1f 峰高（线性/非线性拟合）。",
      "inputSchema": {"type": "object", "properties": {
          "species": {"type": "string", "description": "气体分子"},
-         "wn0": {"type": "number", "description": "中心波数 cm⁻¹"},
+         "wn0": {"type": "number", "description": "中心波数 cm⁻¹（兼容旧名；推荐 wn_center）"},
+         "wn_center": {"type": "number", "description": "中心波数 cm⁻¹（规范名，与 wn0 二选一）"},
          "T": {"type": "number", "description": "温度 K"},
          "P": {"type": "number", "description": "压力 atm"},
-         "L": {"type": "number", "description": "光程 cm"},
+         "L": {"type": "number", "description": "光程 cm（兼容旧名；推荐 L_cm）"},
+         "L_cm": {"type": "number", "description": "光程 cm（规范名，与 L 二选一）"},
          "x_list": {"type": "array", "items": {"type": "number"}, "description": "浓度列表（默认 5 个）"},
          "save_png": {"type": "boolean", "description": "是否绘图"}
-     }, "required": ["species", "wn0"]}},
+     }, "required": ["species"]}},
     {"name": "tdlas_export",
      "description": "导出结果为 CSV/JSON。",
      "inputSchema": {"type": "object", "properties": {

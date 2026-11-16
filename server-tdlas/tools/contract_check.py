@@ -168,6 +168,16 @@ check("tdlas_simulate.L 文案声明按物种推荐（不写死单一数值）",
       "按物种推荐" in _desc("tdlas_simulate", "L") and "cm" in _desc("tdlas_simulate", "L"),
       f"-> {_desc('tdlas_simulate', 'L')[:80]}")
 
+# 双别名必须一致：同一物理量给两套名字且数值不同，属于静默算错的高风险用法。
+_alias_err = None
+try:
+    M.t_simulate("CH4", wn0=2968.5, wn_center=2968.6)
+except ValueError as e:
+    _alias_err = e
+check("wn0 / wn_center 冲突时拒绝（不静默取其一）",
+      _alias_err is not None and "wn0" in str(_alias_err),
+      f"-> {_alias_err}")
+
 
 # ───────────────────── 2. 参数真的透传到引擎 ─────────────────────
 print("=== 2. WMS 参数透传（含曾静默丢弃的一族）===")
@@ -610,21 +620,21 @@ check("multi_conc 线性诊断生效（≥2 点则判线性）",
       _here and _here.get("linearity", {}).get("checked") is True,
       f"-> {_here.get('linearity') if _here else None}")
 
-# ───────────────────── 9. 多浓度同图 png_overlay + BUG-D 透出 X/Y ─────────────────────
-print("=== 9. 多浓度同图 png_overlay + BUG-D 透出 X/Y ===")
-# 兼容性操作：x_list + save_png 必须产出多浓度同图（覆盖在单浓度详图之外）
-_ov = M.t_simulate("CH4", wn0=2968.5, x_list=["1e-4", "1e-3"], save_png=True)
-check("x_list+save_png 产出 png_overlay（多浓度同图）",
-      "png_overlay" in _ov and os.path.exists(_ov["png_overlay"]),
-      f"-> {_ov.get('png_overlay')}")
+# ───────────────────── 9. 单一绘图入口 + BUG-D 透出 X/Y ─────────────────────
+print("=== 9. 单一绘图入口 + BUG-D 透出 X/Y ===")
+# 防呆：解析工具不再提供三子图简图，必须明确指向仪器链六子图。
+_redirect = None
+try:
+    M.t_simulate("CH4", wn0=2968.5, x_list=["1e-4", "1e-3"], save_png=True)
+except ValueError as e:
+    _redirect = e
+check("tdlas_simulate 已停止绘图并指向 tdlas_wms_instrument",
+      _redirect is not None and "tdlas_wms_instrument" in str(_redirect),
+      f"-> {_redirect}")
 _ovw = M.t_wms_instrument("CH4", wn_center=2968.5, x_list=["1e-4", "1e-3"], save_png=True)
 check("WMS x_list+save_png 产出 png_overlay",
       "png_overlay" in _ovw and os.path.exists(_ovw["png_overlay"]),
       f"-> {_ovw.get('png_overlay')}")
-# 向后兼容：单浓度或没有 save_png 都不应产出 png_overlay
-_single = M.t_simulate("CH4", wn0=2968.5, save_png=True)
-check("单浓度+save_png 不产出 png_overlay（兼容性）", "png_overlay" not in _single,
-      f"-> keys={list(_single)}")
 _nosvg = M.t_simulate("CH4", wn0=2968.5, x_list=["1e-4", "1e-3"])
 check("多浓度但不 save_png 不产出 png_overlay（兼容性）", "png_overlay" not in _nosvg,
       f"-> keys={list(_nosvg)}")

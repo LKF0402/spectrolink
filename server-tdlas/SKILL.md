@@ -54,11 +54,11 @@ description: SpectroLink 子服务器 server-tdlas（L2 参考，AI 自动读取
 `clarify.needed=true` → **必须先询问，得到回答前不得绘图**。
 用户指定“使用默认值”时可跳过。
 
-**参数名以工具 schema 为准**：不同工具参数名不同（如 `tdlas_simulate` 用 `wn0`/`L_cm`（`L` 兼容别名），`tdlas_wms_instrument` 用 `wn_center`/`scan_span_cm`/`L_cm`）。本 server 对未声明参数**严格拒绝**（防止拼写错误），调用前先查工具 schema，禁止依据旧工具习惯传参。
+**参数命名统一**：全工具接受 `wn0` / `wn_center` 与 `L` / `L_cm` 两组别名；规范名为 `wn_center`、`L_cm`，同时给出且数值不一致会被拒绝。`scan_span_cm` 等仪器参数仍以工具 schema 为准。本 server 对未声明参数**严格拒绝**（防止拼写错误），调用前先查工具 schema，禁止依据旧工具习惯传参。
 
 ## C. 绘图规范（硬约束）
 
-**用户要求绘图时必须传 `save_png=true`**，否则无法交付图像。
+**绘图唯一入口**：WMS 图用 `tdlas_wms_instrument`、DAS 图用 `tdlas_das_instrument`，两者都需 `save_png=true`。`tdlas_simulate` 只返回数值，`save_png=true` 会被拒绝并提示改用 WMS 工具；不要用解析工具出图。
 
 **图型选择**：
 

@@ -22,10 +22,10 @@ DOAS 在**紫外-可见宽带域**分离"慢变背景"与"分子窄带吸收"：
 
 | 任务 | 工具 |
 |---|---|
-| 单浓度正演：宽带源包络→分子吸收→差分反演披露 | `t_doas_forward` |
-| 浓度扫描标定：x_min..x_max → 反演浓度表 + 线性拟合 | `t_doas_calibrate` |
-| 实测谱差分反演（传等长 I/I₀/σ 数组） | `t_doas_invert` |
-| 数值锚点自检（离线） | `t_doas_selftest` |
+| 单浓度正演：宽带源包络→分子吸收→差分反演披露 | `doas_forward` |
+| 浓度扫描标定：x_min..x_max → 反演浓度表 + 线性拟合 | `doas_calibrate` |
+| 实测谱差分反演（传等长 I/I₀/σ 数组） | `doas_invert` |
+| 数值锚点自检（离线） | `doas_selftest` |
 
 ## 关键参数（默认演示占位）
 
@@ -46,9 +46,9 @@ DOAS 在**紫外-可见宽带域**分离"慢变背景"与"分子窄带吸收"：
 
 ## 交互契约
 
-- 仪器/分析工具返回 `interaction` 与 `next_required_actions`；`conclusion_allowed=false`（缺 I/I₀/σ、浓度越界）时不得给出定量结论，`must_disclose` 项须在同一回答说明。`t_doas_selftest` 不返回契约块。
+- 仪器/分析工具返回 `interaction` 与 `next_required_actions`；`conclusion_allowed=false`（缺 I/I₀/σ、浓度越界）时不得给出定量结论，`must_disclose` 项须在同一回答说明。`doas_selftest` 不返回契约块。
 - `validation.overall`：`fail` 不得下结论；`warn`（默认演示占位）须披露；`checks[]` 含浓度域、峰光学厚度、反演误差、标定 R²/斜率/归一化最大误差。
-- `t_doas_invert` 不传数组时只返回 `usage`，**`x=None` 不是结果**，必须阻断结论。
+- `doas_invert` 不传数组时只返回 `usage`，**`x=None` 不是结果**，必须阻断结论。
 - 标定输出 `slope`（反演浓度/真值）检验算法；`max_abs_err_frac` 已按浓度满量程归一化，勿再按单点相对误差解读。
 
 ## 使用声明

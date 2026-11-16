@@ -529,26 +529,26 @@ out["next_required_actions"] = [
 ### 8.1 NDIR（非分散红外，server-ndir）
 
 - 物理：宽带源 + 滤光片带通 + 双通道 Beer-Lambert。信号通道 `I_s = I0_s·exp(−k_s·x·P·L_s/(k_B T))`，参考通道近零吸收；`R = I_s/I_r` 的对数差 `lnR` 与浓度线性（`A = k_s·L_s − k_r·L_r`）。
-- 工具：`t_ndir_forward`（正演 + 解析反演 + 3σ 披露）/ `t_ndir_calibrate`（lnR 线性拟合 + R²）/ `t_ndir_invert`（比值→浓度）。
+- 工具：`ndir_forward`（正演 + 解析反演 + 3σ 披露）/ `ndir_calibrate`（lnR 线性拟合 + R²）/ `ndir_invert`（比值→浓度）。
 - 关键坑：拟合斜率符号（A 为差分吸收系数，负号易错）；单点噪声判据须用绝对误差而非相对。
 
 ### 8.2 CRDS（腔衰荡，server-crds）
 
 - 物理：腔衰荡时间 `τ₀ = L/(c(1−R))`（R 为镜面反射率）；有吸收时 `τ = τ₀/(1 + α·c·L_eff·τ₀/L)`；ring-down 波形 `V(t) = V0·exp(−t/τ)`，对数线性拟合求 τ；有效光程 `L_eff = L/(1−R)`。
-- 工具：`t_crds_simulate`（τ₀/ring-down/有效光程；**HITRAN 在线失败自动 gaussian_fallback 并披露**）/ `t_crds_ringdown`（拟合）/ `t_crds_invert`。
+- 工具：`crds_simulate`（τ₀/ring-down/有效光程；**HITRAN 在线失败自动 gaussian_fallback 并披露**）/ `crds_ringdown`（拟合）/ `crds_invert`。
 - 数值锚点：R=0.999、L=1 m → τ₀=3.335 µs（精确）；拟合 R²=0.99997。
 
 ### 8.3 FTIR（傅里叶变换红外，server-ftir）
 
 - 物理：`build_interferogram(T, nu, x_max)` 采样绝对波数 Nyquist `dx = 1/(2·ν_Ny)`（ν_Ny = 1.05·ν_max，防止载波混叠）；`recover_spectrum` 余弦变换 + 切趾窗（boxcar/hamming/blackman_harris）；恢复幅值用**翼区中位数归一**（解析正交因子欠分辨不稳）；边缘伪影用**保护带**（分析区外 pad=max(0.3, 2·Δν_res)，恢复后裁剪）。
-- 工具：`t_ftir_simulate`（正演：透射谱→干涉图→恢复→分辨率/半高披露→浓度反演）/ `t_ftir_invert`（传恢复谱数组）。
+- 工具：`ftir_simulate`（正演：透射谱→干涉图→恢复→分辨率/半高披露→浓度反演）/ `ftir_invert`（传恢复谱数组）。
 - 已知物理特征：窄峰欠分辨 + BH 窗时恢复谱中心可为负（主瓣太宽），属真实行为；切趾对比用**窗 DFT 旁瓣水平**（boxcar −13.5 / hamming −52.5 / BH −93 dB）而非恢复谱翼区泄漏。
 - 数值锚点：往返中心误差 0.21%（Δν=8 cm⁻¹）；分辨率 4→8 cm⁻¹ 时窄峰 FWHM ×1.75；反演误差 0.05%。
 
 ### 8.4 DOAS（差分吸收光谱，server-doas）
 
 - 物理：`I(λ) = I0(λ)·exp[−σ(λ)·c·L − ε_slow(λ)·L]`；**差分拟合** `ln(I0/I) = Σaₖ·λₖ + σ(λ)·L·c` 联合最小二乘一次求解（两阶段法有遗漏变量偏置）；演示截面为高斯带占位（NO₂ 448 nm 量级），真实截面须用户提供。
-- 工具：`t_doas_forward` / `t_doas_calibrate` / `t_doas_invert`（传 I/i0/sigma 数组）。
+- 工具：`doas_forward` / `doas_calibrate` / `doas_invert`（传 I/i0/sigma 数组）。
 - 关键坑：① 数密度与摩尔分数换算（差 k_B T/P·atm）；② σ·L 列与多项式列差 17 个数量级须**列归一化**防秩亏；③ 背景须多项式可表示（exp 型散射在窄窗口用低阶多项式拟合残差会污染 σ 带）。
 - 数值锚点：无噪反演精确；多项式阶数 deg 2~6 稳健；1% 光强噪声统计判据过；标定 slope=1.0、R²=1.0。
 

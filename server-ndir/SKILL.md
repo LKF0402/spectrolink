@@ -21,10 +21,10 @@ NDIR 用**宽带红外源 + 窄带滤光片**，不扫谱、无激光：
 
 | 任务 | 工具 |
 |---|---|
-| 单浓度正演：双通道信号/比值/解析反演 | `t_ndir_forward` |
-| 浓度扫描标定：x_min..x_max → R(x) 表 + lnR 线性拟合 | `t_ndir_calibrate` |
-| 比值 → 浓度解析反演：x = −ln(R/R₀)/(k_s·L_s−k_r·L_r) | `t_ndir_invert` |
-| 数值锚点自检（离线） | `t_ndir_selftest` |
+| 单浓度正演：双通道信号/比值/解析反演 | `ndir_forward` |
+| 浓度扫描标定：x_min..x_max → R(x) 表 + lnR 线性拟合 | `ndir_calibrate` |
+| 比值 → 浓度解析反演：x = −ln(R/R₀)/(k_s·L_s−k_r·L_r) | `ndir_invert` |
+| 数值锚点自检（离线） | `ndir_selftest` |
 
 ## 关键参数（默认演示占位）
 
@@ -45,9 +45,9 @@ NDIR 用**宽带红外源 + 窄带滤光片**，不扫谱、无激光：
 
 ## 交互契约
 
-- 仪器/分析工具返回 `interaction` 与 `next_required_actions`；`conclusion_allowed=false`（浓度越界、`A_net≤0`）时不得给出定量结论，`must_disclose` 项须在同一回答说明。`t_ndir_selftest` 不返回契约块。
+- 仪器/分析工具返回 `interaction` 与 `next_required_actions`；`conclusion_allowed=false`（浓度越界、`A_net≤0`）时不得给出定量结论，`must_disclose` 项须在同一回答说明。`ndir_selftest` 不返回契约块。
 - `validation.overall`：`fail` 不得下结论；`warn`（默认演示占位）须披露。标定 `fit.r2`、`R0_fit`、`A_match` 逐项写在 `checks[]`。
-- 标定结果用 `t_ndir_calibrate` 的 `A_fit`（=k_s·L_s−k_r·L_r）作为反演输入，勿手抄；`R0_fit≈1` 是截距/符号正确的守卫。
+- 标定结果用 `ndir_calibrate` 的 `A_fit`（=k_s·L_s−k_r·L_r）作为反演输入，勿手抄；`R0_fit≈1` 是截距/符号正确的守卫。
 
 ## 使用声明
 

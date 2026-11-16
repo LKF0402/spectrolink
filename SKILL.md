@@ -17,10 +17,10 @@ description: SpectroLink —— 多技术光谱传感仿真 MCP 总入口。触�
 |---|---|---|---|
 | 波长调制/锁相谐波/中红外吸收/快速在线浓度 | TDLAS-DA / WMS | `server-tdlas` | `tdlas_*` |
 | 石英音叉/热弹压电探测/2f/MDL | LITES | `server-lites` | `lites_*` |
-| 腔衰荡时间测量/超高反射镜/痕量高精度 | CRDS | `server-crds` | `t_crds_*` |
-| 宽带光源+滤光双通道/工业 CO2·CH4 | NDIR | `server-ndir` | `t_ndir_*` |
-| 宽谱干涉图/多组分同时/离线分析 | FTIR | `server-ftir` | `t_ftir_*` |
-| 紫外-可见宽带差分吸收/开放光路 NO2·SO2 | DOAS | `server-doas` | `t_doas_*` |
+| 腔衰荡时间测量/超高反射镜/痕量高精度 | CRDS | `server-crds` | `crds_*` |
+| 宽带光源+滤光双通道/工业 CO2·CH4 | NDIR | `server-ndir` | `ndir_*` |
+| 宽谱干涉图/多组分同时/离线分析 | FTIR | `server-ftir` | `ftir_*` |
+| 紫外-可见宽带差分吸收/开放光路 NO2·SO2 | DOAS | `server-doas` | `doas_*` |
 
 ## 2. 渐进式披露 · 自动调度协议（强制执行）
 
@@ -46,7 +46,7 @@ description: SpectroLink —— 多技术光谱传感仿真 MCP 总入口。触�
 
 - **交互契约**：`validation.overall=fail` 不得下结论先修；`warn` 须在回答披露。
 - **参数优先级**：① 用户实测 → ② 器件型号 datasheet（联网核验）→ ③ 标定 → ④ 默认值+显式标注。`clarify.needed=true` 时必须先询问再绘图。
-- **绘图**：用户要求绘图时必须传 `save_png=true`；纵轴只按有效数据区确定；图面注明技术名、关键参数与“理论仿真”。
+- **绘图**：WMS 图用 `tdlas_wms_instrument`、DAS 图用 `tdlas_das_instrument`，均传 `save_png=true`；`tdlas_simulate` 只返回数值并拒绝绘图。纵轴只按有效数据区确定；图面注明技术名、关键参数与“理论仿真”。
 - **自检**：每个 server 提供 `*_selftest`；改代码后按 §3.2 分级回归，不做无差别全量。
 
 ## 3.1 免标定（仅 TDLAS / LITES，v1.1.0）

@@ -20,9 +20,9 @@ FTIR 以**宽带干涉测量**获得全谱（Fellgett 优点——全波段同�
 
 | 任务 | 工具 |
 |---|---|
-| 正演：透射谱→干涉图→切趾恢复→分辨率披露→浓度反演 | `t_ftir_simulate` |
-| 恢复谱 → 浓度最小二乘反演（用户提供数组） | `t_ftir_invert` |
-| 数值锚点自检（离线） | `t_ftir_selftest` |
+| 正演：透射谱→干涉图→切趾恢复→分辨率披露→浓度反演 | `ftir_simulate` |
+| 恢复谱 → 浓度最小二乘反演（用户提供数组） | `ftir_invert` |
+| 数值锚点自检（离线） | `ftir_selftest` |
 
 ## 关键参数（默认演示占位）
 
@@ -38,15 +38,15 @@ FTIR 以**宽带干涉测量**获得全谱（Fellgett 优点——全波段同�
 1. **切趾窗 tradeoff**：boxcar 分辨率最好但 sinc 旁瓣振铃（弱线被淹没）；Hamming/Blackman-Harris 抑制旁瓣但主瓣展宽（分辨率变差）。选窗 = 分辨率 vs 动态范围取舍。
 2. **分辨率是硬披露项**：恢复谱 ≤0.5/x_max 的窄吸收线会被压矮/展宽，定量必须披露 ILS 效应；线宽接近分辨率时浓度低估。
 3. **干涉图截断即旁瓣源**：x_max 不足 → 恢复谱振铃，与真实吸收峰混淆。
-4. **多组分反演需要同口径纯组分谱**：`t_ftir_invert` 要求用户传实测恢复谱与纯组分 α(ν) 等长数组，不得编造数组。
+4. **多组分反演需要同口径纯组分谱**：`ftir_invert` 要求用户传实测恢复谱与纯组分 α(ν) 等长数组，不得编造数组。
 5. **横轴波数 cm⁻¹**；恢复谱 T′ 是比例量，反演用 ln 域差分。
 6. **数值锚点**：自检含 boxcar 恢复分辨率与单线闭合断言。
 
 ## 交互契约
 
-- 仪器/分析工具返回 `interaction` 与 `next_required_actions`；`conclusion_allowed=false`（缺输入数组、浓度越界）时不得给出定量结论，`must_disclose` 项须在同一回答说明。`t_ftir_selftest` 不返回契约块。
+- 仪器/分析工具返回 `interaction` 与 `next_required_actions`；`conclusion_allowed=false`（缺输入数组、浓度越界）时不得给出定量结论，`must_disclose` 项须在同一回答说明。`ftir_selftest` 不返回契约块。
 - `validation.overall`：`fail` 不得下结论；`warn`（默认演示占位）须披露；`checks[]` 含浓度域、反演误差与分辨率。
-- `t_ftir_invert` 不传数组时只返回 `usage`，**`x=None` 不是结果**，必须阻断结论。
+- `ftir_invert` 不传数组时只返回 `usage`，**`x=None` 不是结果**，必须阻断结论。
 - `window` 非 boxcar 时披露分辨率损失；`line_source=hitran` 降级时披露。
 
 ## 使用声明

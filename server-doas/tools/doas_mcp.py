@@ -3,10 +3,10 @@
 """DOAS 仪器级仿真 MCP 服务器（stdio JSON-RPC 2024-11-05）。
 
 工具面：
-  · t_doas_forward    单浓度正演（宽带源/吸收/差分反演披露）
-  · t_doas_calibrate  浓度扫描标定曲线（线性拟合 + R²）
-  · t_doas_invert     实测谱 → 差分反演浓度（用户传 I/i0/sigma 数组）
-  · t_doas_selftest   数值锚点自检
+  · doas_forward    单浓度正演（宽带源/吸收/差分反演披露）
+  · doas_calibrate  浓度扫描标定曲线（线性拟合 + R²）
+  · doas_invert     实测谱 → 差分反演浓度（用户传 I/i0/sigma 数组）
+  · doas_selftest   数值锚点自检
 
 纪律：纯标准库 stdio JSON-RPC；print 只走协议 stdout；
 参考截面/源包络/光程默认均为 ai 演示占位，真实器件参数须用户交互提供。
@@ -47,7 +47,7 @@ _sanitize_paths = make_path_sanitizer(_WS_ROOT, _HOME)
 
 # ── 工具实现 ──────────────────────────────────────────────
 
-def t_doas_forward(x=5e-6, L_cm=50.0, species="NO2", wl_min=400.0, wl_max=500.0,
+def doas_forward(x=5e-6, L_cm=50.0, species="NO2", wl_min=400.0, wl_max=500.0,
                    n_wl=401, T=296.0, P=1.0, poly_deg=3, noise_frac=0.0, seed=0):
     """单浓度 DOAS 正演。x 为摩尔分数（1e-6=1ppm）。λ 单位 nm。
 
@@ -71,7 +71,7 @@ def t_doas_forward(x=5e-6, L_cm=50.0, species="NO2", wl_min=400.0, wl_max=500.0,
     return out
 
 
-def t_doas_calibrate(x_min=0.0, x_max=2e-5, n=11, L_cm=50.0, species="NO2",
+def doas_calibrate(x_min=0.0, x_max=2e-5, n=11, L_cm=50.0, species="NO2",
                      T=296.0, P=1.0, poly_deg=3, noise_frac=0.0, seed=0):
     """浓度扫描标定：x_min..x_max 等距 n 点 → 反演浓度表 + 线性拟合。"""
     out = dph.calibrate(x_min, x_max, n, L_cm, species, T, P, poly_deg,
@@ -89,7 +89,7 @@ def t_doas_calibrate(x_min=0.0, x_max=2e-5, n=11, L_cm=50.0, species="NO2",
     return out
 
 
-def t_doas_invert(I=None, i0=None, sigma=None, L_cm=50.0, poly_deg=3):
+def doas_invert(I=None, i0=None, sigma=None, L_cm=50.0, poly_deg=3):
     """实测谱 → 差分反演浓度（等长数组 I/i0/sigma；不传数组给用法提示）。"""
     if I is None or i0 is None or sigma is None:
         return {"usage": "传等长数值数组 I（实测光强）、i0（参考光强）、sigma（吸收截面 cm²/molecule）",
@@ -109,7 +109,7 @@ def t_doas_invert(I=None, i0=None, sigma=None, L_cm=50.0, poly_deg=3):
     return out
 
 
-def t_doas_selftest():
+def doas_selftest():
     """数值锚点自检（离线，不依赖网络）。"""
     return dph.selftest()
 
@@ -165,7 +165,7 @@ _SEV_BLOCK = "block_conclusion"
 
 
 TOOLS = [
-    {"name": "t_doas_forward",
+    {"name": "doas_forward",
      "description": "DOAS 单浓度正演：宽带源包络→分子吸收→差分反演披露。x 摩尔分数（1e-6=1ppm），λ 单位 nm。默认截面/源为演示占位（NO₂ 448 nm 量级），真实截面须用户提供。",
      "inputSchema": {"type": "object",
                      "properties": {
@@ -180,7 +180,7 @@ TOOLS = [
                          "poly_deg": {"type": "integer", "description": "慢变背景多项式阶数", "default": 3},
                          "noise_frac": {"type": "number", "description": "相对高斯噪声 σ", "default": 0.0},
                          "seed": {"type": "integer", "default": 0}}}},
-    {"name": "t_doas_calibrate",
+    {"name": "doas_calibrate",
      "description": "DOAS 浓度扫描标定：x_min..x_max 等距 n 点 → 反演浓度表 + 线性拟合（slope/R²/max_abs_err）。",
      "inputSchema": {"type": "object",
                      "properties": {
@@ -194,7 +194,7 @@ TOOLS = [
                          "poly_deg": {"type": "integer", "default": 3},
                          "noise_frac": {"type": "number", "default": 0.0},
                          "seed": {"type": "integer", "default": 0}}}},
-    {"name": "t_doas_invert",
+    {"name": "doas_invert",
      "description": "DOAS 实测谱差分反演：c = argmin ‖ln(I0/I)−P(λ)−σ·L·c‖²。传等长数组 I/i0/sigma。",
      "inputSchema": {"type": "object",
                      "properties": {
@@ -203,7 +203,7 @@ TOOLS = [
                          "sigma": {"type": "array", "items": {"type": "number"}, "description": "吸收截面 cm²/molecule"},
                          "L_cm": {"type": "number", "default": 50.0},
                          "poly_deg": {"type": "integer", "default": 3}}}},
-    {"name": "t_doas_selftest",
+    {"name": "doas_selftest",
      "description": "DOAS 数值锚点自检（离线）。",
      "inputSchema": {"type": "object", "properties": {}}},
 ]
@@ -213,7 +213,7 @@ TOOLS = [
 
 DISPATCH = {t["name"]: globals()[t["name"]] for t in TOOLS}
 install_interaction(DISPATCH, TOOLS, _SESSION_FILE, _actions,
-                    sev_block=_SEV_BLOCK, skip={"t_doas_selftest"})
+                    sev_block=_SEV_BLOCK, skip={"doas_selftest"})
 _SCHEMA_BY_NAME = schema_index(TOOLS)
 
 # 此前是自写的弱口径：无批量/通知、无必填/未知键/类型校验，还能吃位置参数
