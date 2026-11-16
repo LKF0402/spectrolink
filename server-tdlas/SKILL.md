@@ -156,3 +156,11 @@ description: SpectroLink 子服务器 server-tdlas（L2 参考，AI 自动读取
 ## G. 使用声明
 
 输出为理论仿真，严禁冒充实验数据。
+
+## H. 变更验证（按影响面，不跑全量）
+
+- 改文档/文案：不跑代码门禁。
+- 改单工具：`py_compile` + 该工具 1 正例 + 1 边界/反例。
+- 改 schema / DISPATCH：`tools/contract_check.py` + `tools/_rpc_test.py`。
+- 改 HITRAN / 缓存 / 物理内核：`tdlas_mcp.py --selftest` + 1 组前后基准。
+- 发布前才跑全量契约、RPC 与受影响 selftest。

@@ -31,6 +31,8 @@ description: SpectroLink —— 多技术光谱传感仿真 MCP 总入口。触�
 2. **按需自动 Read** `<server>/SKILL.md`：任务需要调用该技术工具、输出定量结论、绘图或披露参数时，必须先 Read 其 L2（含路由表、默认披露、注意事项）。未 Read 前不得调用该技术工具。
 3. 按 L2 工具路由表调用；处理返回的 `validation` / `next_required_actions`。
 
+同一会话内已 Read 且文件未改动时复用该 L2，不重复读取；参数仍以工具 schema 为准。
+
 **披露深度分级（自动选择，够用即止）**：
 | 深度 | 何时 | 披露内容 |
 |---|---|---|
@@ -45,13 +47,28 @@ description: SpectroLink —— 多技术光谱传感仿真 MCP 总入口。触�
 - **交互契约**：`validation.overall=fail` 不得下结论先修；`warn` 须在回答披露。
 - **参数优先级**：① 用户实测 → ② 器件型号 datasheet（联网核验）→ ③ 标定 → ④ 默认值+显式标注。`clarify.needed=true` 时必须先询问再绘图。
 - **绘图**：用户要求绘图时必须传 `save_png=true`；纵轴只按有效数据区确定；图面注明技术名、关键参数与“理论仿真”。
-- **自检**：每个 server 提供 `*_selftest`；改代码后全量回归。
+- **自检**：每个 server 提供 `*_selftest`；改代码后按 §3.2 分级回归，不做无差别全量。
 
 ## 3.1 免标定（仅 TDLAS / LITES，v1.1.0）
 
 - **TDLAS**：`tdlas_calibfree` 三种模式——`shape`（波形一致性，`x=null`）、`absolute`（需 I0 透射）、`anchored`（单点已知浓度）。浓度走 `absolute` / `anchored`。
 - **LITES**：`lites_calibfree` 仅实现 `anchored`（单点参考 + 功率监测 + 共振归一化）。单点锚定后，同器件、同波长可跨浓度输出结果。
 - **最小数据清单**：零基线（0% 气/暗）+ 绝对锚点（I0/参考浓度）+ 仪器状态（L/T/P/调制/锁相/采样）；详见 `docs/CALIB_FREE.md`。
+
+## 3.2 执行节奏与验证分级（控制无效返工）
+
+| 改动范围 | 最小验证 | 本次不跑 |
+|---|---|---|
+| 文档/文案，未动 schema | 不跑代码门禁 | selftest / RPC |
+| 单工具函数 | `py_compile` + 1 正例 + 1 边界 | 全量契约 / 其他技术 |
+| schema / 协议 / DISPATCH | `contract_check.py` + 对应 `_rpc_test.py` | 其他技术 selftest |
+| HITRAN / 缓存 / 物理内核 | 对应 server `--selftest` + 1 组前后基准 | 六技术全量 |
+| 发布前 | 全量契约 + 两套 RPC + 受影响 selftest | — |
+
+- 同一会话已 Read 且文件未改动，不重复 Read L2 或 schema。
+- 一次 profiling、一次修改、一次验证；同一基准不重复跑。
+- 信息足够即交付；阻塞问题一次问清，不跨轮反复试探。
+- 时间盒：单点修复 10 min，协议/内核 30 min；超时先报阻塞点与已完成部分，不扩大范围。
 
 ## 4. 物理内核与数据
 
