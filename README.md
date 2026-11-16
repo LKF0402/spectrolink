@@ -18,6 +18,10 @@ TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
 <img src="https://img.shields.io/badge/calibfree-TDLAS%20%2B%20LITES-4C8C4A" alt="Calib-free">
 <a href="https://github.com/LKF0402/spectrolink/commits/main"><img src="https://img.shields.io/github/last-commit/LKF0402/spectrolink" alt="Last commit"></a>
 <a href="https://github.com/LKF0402/spectrolink/issues"><img src="https://img.shields.io/github/issues/LKF0402/spectrolink" alt="Issues"></a>
+<a href="https://github.com/LKF0402/spectrolink/network/members"><img src="https://img.shields.io/github/forks/LKF0402/spectrolink" alt="Forks"></a>
+<img src="https://img.shields.io/github/commit-activity/m/LKF0402/spectrolink" alt="Commit activity">
+<img src="https://img.shields.io/badge/API%20key-none-4C8C4A" alt="No API key">
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-v1.1.0-blue" alt="Changelog"></a>
 <img src="https://img.shields.io/badge/docs-TECHNICAL%20%C2%B7%20USAGE-blueviolet" alt="Docs">
 
 </div>
@@ -185,7 +189,7 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 | lites_waveform | 合成 2f 波形 + 6 子图（吸收线型 / 机械传递 / 热扩散 / 2f / 扣基线 / 噪声预算） |
 | lites_invert | 实测 2f 幅值 → 摩尔分数（含反推自洽性校验） |
 | ⭐ **lites_calibfree** | **免标定**：单点已知浓度 + 功率/共振归一化；`mode=guide` 提供数据清单 |
-| lites_review | 实验方案评审：LITES 7 类失效模式逐条检查 |
+| lites_review | 实验方案评审：LITES 7 类关键风险点逐条检查 |
 | lites_compare | 多器件统一口径对比（同线强/浓度/噪声） |
 | lites_noise_budget | 噪声预算拆分：1/f / 白噪声 / TIA 各自占比 |
 | lites_guide | LITES 交互协议与术语检索（建议作为初始入口） |

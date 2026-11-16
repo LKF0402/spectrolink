@@ -14,7 +14,7 @@
   · 单位：波数 cm^-1 / 温度 K / 压力 atm / 光程 cm / 调制深度 cm^-1。
 
 用法：
-    python tdlas_sim.py             # 自测 + 出图
+    python tdlas_sim.py             # 自测 + 绘图
     python tdlas_sim.py --selftest  # 只自测
 """
 from __future__ import annotations
@@ -340,7 +340,7 @@ def selftest():
         assert ("offset_V" in str(e)) or ("功率" in str(e)), f"报错信息不含关键提示：{e}"
         print(f"  越界保护：wn_center=6500 → ValueError（{str(e)[:42]}…）")
 
-    # 10) 二次调谐不可达：判别式 < 0 必须硬报错（不得用 max(disc,0) 编出一个假根）
+    # 10) 二次调谐不可达：判别式 < 0 必须显式报错（不得用 max(disc,0) 编出一个假根）
     try:
         simulate_wms_instrument(wn_center=float(LASER_DEFAULTS["wn_ref"]) + 5.0,
                                 d2nu_dI2=-1e-3, mod_amp_V=0.1)
@@ -1254,7 +1254,7 @@ def _resolve_scan(cfg, wn_center, user_keys):
             disc = dnu_dI * dnu_dI - 2.0 * d2 * c
             if disc < 0.0:
                 # 判别式 < 0 ⇒ 该二次调谐曲线取不到目标波数。此前用 max(disc, 0) 截断成"重根"，
-                # 会凭空造出一个虚假的驱动电压、下游照常出谱（静默伪造），必须硬报错。
+                # 会凭空造出一个虚假的驱动电压、下游照常出谱（静默伪造），必须显式报错。
                 nu_ext = wn_ref - dnu_dI * dnu_dI / (2.0 * d2)   # 调谐曲线顶点（可达极值）
                 reach = f"≤ {nu_ext:.6g}" if d2 < 0 else f"≥ {nu_ext:.6g}"
                 raise ValueError(
@@ -1273,7 +1273,7 @@ def _resolve_scan(cfg, wn_center, user_keys):
 
 
 def _require_driver_range(cfg, wn_center, offset_derived=True):
-    """激光/驱动可行性校验 → 不可行则硬报错（含可达性诊断与可操作建议）。
+    """激光/驱动可行性校验 → 不可行则显式报错（含可达性诊断与可操作建议）。
 
     判据 = **整段扫描都在有效输出区**，由 `_scan_window_reason()` 单点实现（与 `laser_reach()`
     同一套），且**用 cfg 里实际生效的 offset_V / amp_V**：
@@ -1316,7 +1316,7 @@ def _require_driver_range(cfg, wn_center, offset_derived=True):
                 f"{v_lo_eff:.3g}–{DRIVER_V_HI:.0f} V → 任何 wn_ref 都放不下。"
                 f"请减小 scan_span_cm 或核对 η_VI/i_th/dν/dI。")
         if r.get("wn_ref_needed") is not None:
-            # ⚠ 原文案建议"传 laser= 你的真实激光器参数"——但当调用方**已经用了真实器件**时
+            # ⚠ 原文案建议"传 laser= 真实激光器参数"——但当调用方**已经用了真实器件**时
             #   这句话是错的（实测踩到：用户的 nanoplus 覆盖 2963.5–2966.5、内置默认 DFB
             #   覆盖 2966.5–2971.0，两者正好错开——"换真实参数"反而更差）。
             #   改为给三条可执行方案，并明确点出最常用的"改波数"这一条。
@@ -2553,7 +2553,7 @@ def plot_wms_instrument(r, out_png, panels="all", multi=None):
 
     panels: 默认 "all"（标准 6 图，布局/外观与既有完全一致）；也可传子集标识列表
     ["drive","das","al","f1","f2","norm"] 只画所需面板（非 6 个时改竖排堆叠）。
-    混合气时在 αL 面板（al）叠加各组分 αL 曲线（不新增图，保持出图规格不变）。
+    混合气时在 αL 面板（al）叠加各组分 αL 曲线（不新增图，保持绘图规格不变）。
 
     multi: 多浓度同图——list[(ppm: float, rr: dict)]，**含要叠加的全部浓度**（含基准 r）。
     给出后 ②~⑤ 面板按浓度配色叠加（viridis + ppm 图例），纵轴按全部浓度的有效区统一

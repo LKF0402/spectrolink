@@ -92,11 +92,11 @@ $$|H_{th}(f)| = \sqrt{\frac{f_{ref}}{f}},\quad f_{ref} = f_0/2,\quad f \le f_{re
 
 > 因此**不要**套用 QEPAS 的 $f_m = f_0/2$，必须用 `lites_sweep(var="f_m")` 实测扫描找最优。`optimal_2f_frequency()` 给出理论参考值，但实测扫描优先。
 
-### 2.4 MPC 在 LITES 里是负收益
+### 2.4 MPC 在 LITES 中的功率权衡
 
 $$\text{throughput} = \prod_i R^i \approx R^{n_{pass}}$$
 
-银镜 $R=0.98$、259 次反射 → 总透过率仅 $0.98^{259} \approx 0.5\%$。LITES **功率敏感**（信号 $\propto P$），所以多通池是"吸收增益 vs 功率损失"的权衡，**不像 TDLAS 那样净赚**。
+银镜 $R=0.98$、259 次反射 → 总透过率 $0.98^{259} \approx 0.5\%$。LITES **功率敏感**（信号 $\propto P$），因此多通池按"吸收增益与功率损失"权衡，建议结合目标光程与功率预算评估。
 
 `LitesDevice.optical_throughput()` 已把这一衰减显式建模进传递链。
 

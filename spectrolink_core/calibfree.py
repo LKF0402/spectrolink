@@ -76,10 +76,10 @@ GUIDE = {
         "lites": "v2f,v2f_ref,power_mW,f_m_Hz\n0.0012,0.0010,2.0,16378\n...",
     },
     "steps": [
-        "1. 先跑 mode=guide，确认手头有三类数据；配齐即可开跑。",
-        "2. TDLAS 先跑 mode=shape，确认 corr≥0.99、峰位对齐。",
-        "3. 有 I0 跑 mode=absolute；有已知浓度参考跑 mode=anchored。",
-        "4. LITES：给一个已知浓度参考 + 功率监测 + 共振参数，跑 mode=anchored。",
+        "1. 执行 mode=guide，确认三类数据齐全；配齐后即可开始分析。",
+        "2. TDLAS 执行 mode=shape，确认 corr≥0.99、峰位对齐。",
+        "3. 有 I0 时执行 mode=absolute；有已知浓度参考时执行 mode=anchored。",
+        "4. LITES：提供已知浓度参考、功率监测与共振参数，执行 mode=anchored。",
         "5. absolute/anchored 返回 validation；overall=pass 即可直接使用。",
     ],
     "pro_tips": [
@@ -202,6 +202,17 @@ def _as_1d(v, name, n=None):
     return a
 
 
+def _positive(name, value):
+    """把标量转成正的有限浮点数；非法值给出字段级错误，不进入计算。"""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{name} 必须是实数，收到 {value!r}") from None
+    if not math.isfinite(v) or v <= 0:
+        raise ValueError(f"{name} 必须为正的有限数，收到 {v!r}")
+    return v
+
+
 def _peak(y):
     a = np.abs(np.asarray(y))
     return int(np.argmax(a)), float(np.max(a))
@@ -288,6 +299,22 @@ def tdlas_shape(x2f, y2f, x2f_bg=None, y2f_bg=None, *,
     """
     x = _as_1d(x2f, "x2f")
     y = _as_1d(y2f, "y2f", x.size)
+    if x.size < 8:
+        raise ValueError("x2f/y2f 至少需要 8 个采样点，才能稳定估计 2f 对称轴与峰位")
+    wn_center = _positive("wn_center_cm1", wn_center_cm1)
+    L_cm = _positive("L_cm", L_cm)
+    T = _positive("T", T)
+    P = _positive("P", P)
+    if scan_span_cm1 is not None:
+        scan_span_cm1 = _positive("scan_span_cm1", scan_span_cm1)
+    try:
+        m0, m1, dm = (float(v) for v in m_range)
+    except (TypeError, ValueError):
+        raise ValueError("m_range 必须是 (起点, 终点, 步长) 三个实数") from None
+    if not (math.isfinite(m0) and math.isfinite(m1) and math.isfinite(dm)):
+        raise ValueError("m_range 含 NaN/Inf")
+    if m0 <= 0 or m1 < m0 or dm <= 0:
+        raise ValueError("m_range 需满足 0 < 起点 ≤ 终点，且步长 > 0")
     if x2f_bg is None or y2f_bg is None:
         net = x + 1j * y
         bg_used = False
@@ -309,10 +336,10 @@ def tdlas_shape(x2f, y2f, x2f_bg=None, y2f_bg=None, *,
         raise ValueError(f"line_center_index={peak_idx} 越界（0..{x.size-1}）")
 
     # 理论吸收谱：覆盖扫描窗 + 足够的调制边带
-    half_span = max(0.50, (float(scan_span_cm1) if scan_span_cm1 else 1.20) / 2.0)
+    half_span = max(0.50, (scan_span_cm1 if scan_span_cm1 else 1.20) / 2.0)
     nu, alpha, info = _hitran.absorption(
-        str(species).upper(), float(wn_center_cm1) - half_span - 0.30,
-        float(wn_center_cm1) + half_span + 0.30, T=float(T), P=float(P),
+        str(species).upper(), wn_center - half_span - 0.30,
+        wn_center + half_span + 0.30, T=T, P=P,
         step=2e-4, wingHW=20.0)
     hwhm = _hwhm(nu, alpha)
     alpha_peak = float(np.max(alpha))
@@ -320,15 +347,27 @@ def tdlas_shape(x2f, y2f, x2f_bg=None, y2f_bg=None, *,
     # 扫描轴：优先用显式轴；否则以实测 2f 峰为线中心，搜索扫描跨度
     if wn_axis is not None:
         ax = _as_1d(wn_axis, "wn_axis", x.size)
+        if ax.size < 8 or not (np.all(np.diff(ax) > 0) or np.all(np.diff(ax) < 0)):
+            raise ValueError("wn_axis 至少 8 点且必须严格单调（递增或递减）")
         spans = [float(abs(ax[-1] - ax[0]))]
         axes = [ax]
     else:
         spans = ([float(scan_span_cm1)] if scan_span_cm1
                  else list(span_grid or (0.15, 0.20, 0.28, 0.38, 0.50, 0.65, 0.80, 0.96, 1.15, 1.40, 1.70, 2.00, 2.40)))
-        axes = [float(wn_center_cm1) + (np.arange(x.size) - peak_idx)
+        if any((not math.isfinite(float(s))) or float(s) <= 0 for s in spans):
+            raise ValueError("扫描跨度必须为正的有限数")
+        axes = [wn_center + (np.arange(x.size) - peak_idx)
                 * (s / max(1, x.size - 1)) for s in spans]
 
-    ms = np.arange(float(m_range[0]), float(m_range[1]) + 1e-12, float(m_range[2]))
+    try:
+        m0, m1, dm = (float(v) for v in m_range)
+    except (TypeError, ValueError):
+        raise ValueError("m_range 必须是 (起点, 终点, 步长) 三个实数") from None
+    if not (math.isfinite(m0) and math.isfinite(m1) and math.isfinite(dm)):
+        raise ValueError("m_range 含 NaN/Inf")
+    if m0 <= 0 or m1 < m0 or dm <= 0:
+        raise ValueError("m_range 需满足 0 < 起点 ≤ 终点，且步长 > 0")
+    ms = np.arange(m0, m1 + 1e-12, dm)
     theta = np.linspace(0.0, 2.0 * np.pi, 65)
     cos1, cos2 = np.cos(theta), np.cos(2.0 * theta)
 
@@ -338,7 +377,7 @@ def tdlas_shape(x2f, y2f, x2f_bg=None, y2f_bg=None, *,
         for m in ms:
             a = float(m) * hwhm
             wn_mat = ax[:, None] + a * np.cos(theta)[None, :]
-            tau = np.exp(-np.interp(wn_mat, nu, alpha) * float(L_cm))
+            tau = np.exp(-np.interp(wn_mat, nu, alpha) * L_cm)
             h2 = 2.0 * _trapz(tau * cos2[None, :], theta, axis=1)
             h1 = 2.0 * _trapz(tau * cos1[None, :], theta, axis=1)
             # 复增益最小二乘：net ≈ g·h2
@@ -378,15 +417,15 @@ def tdlas_shape(x2f, y2f, x2f_bg=None, y2f_bg=None, *,
     return {
         "mode": "shape",
         "species": str(species).upper(),
-        "conditions": {"T_K": float(T), "P_atm": float(P), "L_cm": float(L_cm),
-                       "wn_center_cm-1": float(wn_center_cm1)},
+        "conditions": {"T_K": T, "P_atm": P, "L_cm": L_cm,
+                       "wn_center_cm-1": wn_center},
         "result": {
             "m": float(b["m"]),
             "scan_span_cm1": float(b["span_cm1"]),
-            "scan_span_nm": float(b["span_cm1"] * (1e7 / float(wn_center_cm1)) ** 2 / 1e7),
+            "scan_span_nm": float(b["span_cm1"] * (1e7 / wn_center) ** 2 / 1e7),
             "d_wn_per_point_cm1": float(b["span_cm1"] / max(1, x.size - 1)),
             "d_lambda_nm_per_point": float(b["span_cm1"] / max(1, x.size - 1)
-                                            * (1e7 / float(wn_center_cm1)) ** 2 / 1e7),
+                                            * (1e7 / wn_center) ** 2 / 1e7),
             "line_center_index": peak_idx,
             "measured_peak_index": _peak(net)[0],
             "symmetry_score": sym_score,
@@ -431,8 +470,14 @@ def tdlas_das(i_sample, i0, *, species, wn_center_cm1, T=296.0, P=1.01325, L_cm=
     """I/I0 → A=-ln(τ) → 两侧非吸收窗线性基线 → x=A_peak/(α_pureL)。"""
     I = _as_1d(i_sample, "I")
     I0 = _as_1d(i0, "I0", I.size)
+    if I.size < 8:
+        raise ValueError("I/I0 至少需要 8 个采样点，才能做基线拟合与峰位判断")
     if np.any(I <= 0) or np.any(I0 <= 0):
         raise ValueError("I 与 I0 必须全为正（光强不能为负/零；先扣暗信号）")
+    wn_center = _positive("wn_center_cm1", wn_center_cm1)
+    L_cm = _positive("L_cm", L_cm)
+    T = _positive("T", T)
+    P = _positive("P", P)
     tau = I / I0
     A = -np.log(tau)
     n = A.size
@@ -442,7 +487,12 @@ def tdlas_das(i_sample, i0, *, species, wn_center_cm1, T=296.0, P=1.01325, L_cm=
         w1 = (max(2, int(0.08 * n)), max(3, int(0.35 * n)))
         w2 = (min(n - 3, int(0.65 * n)), min(n - 2, int(0.92 * n)))
     else:
-        w1, w2 = [(int(a), int(b)) for a, b in baseline_windows]
+        try:
+            w1, w2 = [(int(a), int(b)) for a, b in baseline_windows]
+        except (TypeError, ValueError):
+            raise ValueError("baseline_windows 必须是 [[起, 止], [起, 止]] 两组整数索引") from None
+        if w1[0] >= w1[1] or w2[0] >= w2[1]:
+            raise ValueError("baseline_windows 每组须满足 起 < 止，索引按采样点从左到右")
     idx = np.concatenate([np.arange(w1[0], w1[1]), np.arange(w2[0], w2[1])])
     idx = idx[(idx >= 0) & (idx < n)]
     if idx.size < 4:
@@ -453,11 +503,10 @@ def tdlas_das(i_sample, i0, *, species, wn_center_cm1, T=296.0, P=1.01325, L_cm=
     A_peak = float(A_corr[peak])
 
     nu, alpha, info = _hitran.absorption(str(species).upper(),
-                                         float(wn_center_cm1) - 0.25,
-                                         float(wn_center_cm1) + 0.25,
-                                         T=float(T), P=float(P), step=2e-4, wingHW=20.0)
+                                         wn_center - 0.25, wn_center + 0.25,
+                                         T=T, P=P, step=2e-4, wingHW=20.0)
     alpha_peak = float(np.max(alpha))
-    x = A_peak / max(alpha_peak * float(L_cm), 1e-300)
+    x = A_peak / max(alpha_peak * L_cm, 1e-300)
     x_status = "ok" if 0.0 < x <= 1.0 else ("negative" if x <= 0 else "high")
     checks = [
         _check("transmission_positive", "pass" if np.all(tau > 0) else "fail",
@@ -472,8 +521,8 @@ def tdlas_das(i_sample, i0, *, species, wn_center_cm1, T=296.0, P=1.01325, L_cm=
     return {
         "mode": "absolute",
         "species": str(species).upper(),
-        "conditions": {"T_K": float(T), "P_atm": float(P), "L_cm": float(L_cm),
-                       "wn_center_cm-1": float(wn_center_cm1)},
+        "conditions": {"T_K": T, "P_atm": P, "L_cm": L_cm,
+                       "wn_center_cm-1": wn_center},
         "result": {
             "x": float(x),
             "x_percent": float(x * 100.0),
@@ -506,18 +555,15 @@ def tdlas_das(i_sample, i0, *, species, wn_center_cm1, T=296.0, P=1.01325, L_cm=
 def anchored_ratio(sample_peak, ref_peak, x_ref, *, label="peak"):
     """x = x_ref · sample/ref；适用于同一 m/轴/增益下的峰高比。"""
     s = float(sample_peak)
-    r = float(ref_peak)
-    xr = float(x_ref)
-    if not (math.isfinite(s) and math.isfinite(r) and math.isfinite(xr)):
-        raise ValueError("sample_peak / ref_peak / x_ref 必须是有限数")
-    if r <= 0 or xr <= 0:
-        raise ValueError("参考峰高与参考浓度必须 >0")
+    s = _positive("sample_peak", sample_peak)
+    r = _positive("ref_peak", ref_peak)
+    xr = _positive("x_ref", x_ref)
     x = xr * s / r
     checks = [
         _check("x_in_unit_interval", "pass" if 0.0 < x <= 1.0 else "warn",
                float(x), "x∈(0,1]；越界说明两测不在同一 m/轴/增益或已出线性区"),
-        _check("ratio_positive", "pass" if s > 0 else "warn", s,
-               "样品峰高应为正；负值说明相位/基线选错"),
+        _check("ratio_positive", "pass", s,
+               "样品峰高已校验为正；相位/基线异常会在输入前报错"),
     ]
     return {
         "mode": "anchored",
@@ -545,40 +591,46 @@ def lites_anchored(v2f_sample, v2f_ref, x_ref, *,
     R 是同调制频率下的机械共振响应；给了 f_m/f0/Q 就按 SDOF 公式算，
     否则要求调用方直接给 resonance_sample/ref（这里用 f_m 参数代替）。
     """
-    v_s = float(v2f_sample)
-    v_r = float(v2f_ref)
-    xr = float(x_ref)
-    if v_r <= 0 or xr <= 0:
-        raise ValueError("参考 2f 电压与参考浓度必须 >0")
+    try:
+        v_s = float(v2f_sample)
+    except (TypeError, ValueError):
+        raise ValueError("v2f_sample 必须是实数") from None
+    if not math.isfinite(v_s):
+        raise ValueError("v2f_sample 必须是有限数")
+    v_r = _positive("v2f_ref", v2f_ref)
+    xr = _positive("x_ref", x_ref)
     v_s = v_s - float(v2f_baseline_sample or 0.0)
     v_r = v_r - float(v2f_baseline_ref or 0.0)
+    if v_s <= 0:
+        raise ValueError("扣背景后的样品 2f 电压 ≤0：基线选错、相位反相或样品无信号")
     if v_r <= 0:
         raise ValueError("扣背景后的参考 2f 电压 ≤0：基线选错或参考浓度太低")
 
-    p_s = float(power_sample_mW) if power_sample_mW is not None else None
-    p_r = float(power_ref_mW) if power_ref_mW is not None else None
-    f_s = float(f_m_sample_Hz) if f_m_sample_Hz is not None else None
-    f_r = float(f_m_ref_Hz) if f_m_ref_Hz is not None else None
+    p_s = _positive("power_sample_mW", power_sample_mW) if power_sample_mW is not None else None
+    p_r = _positive("power_ref_mW", power_ref_mW) if power_ref_mW is not None else None
+    f_s = _positive("f_m_sample_Hz", f_m_sample_Hz) if f_m_sample_Hz is not None else None
+    f_r = _positive("f_m_ref_Hz", f_m_ref_Hz) if f_m_ref_Hz is not None else None
+    f0 = _positive("f0_Hz", f0_Hz) if f0_Hz is not None else None
+    q = _positive("Q", Q) if Q is not None else None
 
     def _res(f):
-        if f is None or f0_Hz is None or Q is None:
+        if f is None or f0 is None or q is None:
             return 1.0
-        u = f / float(f0_Hz) - float(f0_Hz) / f
-        return 1.0 / math.sqrt(1.0 + (float(Q) * u) ** 2)
+        u = f / f0 - f0 / f
+        return 1.0 / math.sqrt(1.0 + (q * u) ** 2)
 
     r_s, r_r = _res(f_s), _res(f_r)
-    has_power = p_s is not None and p_r is not None and p_s > 0 and p_r > 0
-    has_res = (f_s is not None and f_r is not None
-               and f0_Hz is not None and Q is not None)
+    has_power = p_s is not None and p_r is not None
+    has_res = f_s is not None and f_r is not None and f0 is not None and q is not None
     p_factor = (p_r / p_s) if has_power else 1.0
     x = xr * (v_s / v_r) * p_factor * (r_r / max(r_s, 1e-12))
     checks = [
         _check("x_in_unit_interval", "pass" if 0.0 < x <= 1.0 else "warn",
                float(x), "x∈(0,1]；越界先查功率比/共振失谐/基线"),
         _check("power_normalized", "pass" if has_power else "warn",
-               p_factor, "未给功率监测时无法消除激光功率漂移"),
+               p_factor, "两侧功率均给定时启用 P_ref/P 归一化；缺一侧时功率因子按 1 处理"),
         _check("resonance_normalized", "pass" if has_res else "warn",
-               [r_s, r_r], "未给 f_m/f0/Q 时无法消除共振失谐；跨温度/装配必须补"),
+               [r_s, r_r], "f_m/f0/Q 齐全时启用共振响应归一化；缺项时共振因子按 1 处理"),
     ]
     return {
         "mode": "anchored",
@@ -594,8 +646,8 @@ def lites_anchored(v2f_sample, v2f_ref, x_ref, *,
             "V 已扣 0% 气/无气基线；未扣时会把残余 AM 本底当成信号",
             "η_dev 与器件私有增益被 x_ref 吸收；换器件/换波长必须重新锚定",
         ],
-        "identifiability": "单点锚定后，同器件同波长可跨浓度免标定曲线；"
-                           "纯理论绝对免标定不可行（η_dev 与 g 不可分离）。",
+        "identifiability": "单点锚定把器件效率与私有增益吸收进 x_ref；"
+                           "同器件、同波长即可跨浓度输出结果，换器件或换波长重新锚定一次。",
     }
 
 
@@ -633,4 +685,35 @@ def selftest():
     else:
         out.append(f"[FAIL] LITES anchored x={l['result']['x']} / "
                    f"validation={l['validation']['overall']}")
+
+    def _expect_value_error(label, fn):
+        try:
+            fn()
+        except ValueError:
+            return f"[OK] {label}：非法输入显式拒绝"
+        except Exception as e:
+            return f"[FAIL] {label}：抛 {type(e).__name__}，应为 ValueError"
+        return f"[FAIL] {label}：非法输入未被拒绝"
+
+    xd = np.linspace(0.0, 1.0, 32)
+    yd = np.sin(2.0 * np.pi * xd)
+    out.append(_expect_value_error(
+        "LITES f_m=0", lambda: lites_anchored(0.002, 0.001, 0.01,
+                                             f_m_sample_Hz=0.0, f_m_ref_Hz=1.0,
+                                             f0_Hz=1.0, Q=1.0)))
+    out.append(_expect_value_error(
+        "LITES f0=0", lambda: lites_anchored(0.002, 0.001, 0.01,
+                                             f_m_sample_Hz=1.0, f_m_ref_Hz=1.0,
+                                             f0_Hz=0.0, Q=1.0)))
+    out.append(_expect_value_error(
+        "LITES 负功率", lambda: lites_anchored(0.002, 0.001, 0.01,
+                                               power_sample_mW=-1.0, power_ref_mW=1.0)))
+    out.append(_expect_value_error(
+        "TDLAS 负扫描跨度", lambda: tdlas_shape(xd, yd, species="CH4",
+                                                wn_center_cm1=2968.5,
+                                                scan_span_cm1=-0.5)))
+    out.append(_expect_value_error(
+        "TDLAS m_range 零步长", lambda: tdlas_shape(xd, yd, species="CH4",
+                                                    wn_center_cm1=2968.5,
+                                                    m_range=(2.0, 2.0, 0.0))))
     return out

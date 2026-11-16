@@ -193,10 +193,10 @@ def _packing_state(out=None):
                     {"device_type": "optics", "cn": "光学系统",
                      "fields": [{"key": "path_length", "cn": "光程", "unit": "cm"}]}
                 ],
-                "ask_user": ("⚠️ 当前结果全部来自演示默认参数（不是你的真实设备）。"
-                             "建议建立你自己的设备库——只需告诉我你的激光器、探测器、采集卡、光学系统的型号，"
-                             "我会自动查规格书并录入。之后每次仿真都会用你的真实硬件参数，结果才准确。"),
-                "how": "告诉我你的设备型号（如 NI USB-6211、Thorlabs PDA10D2），我帮你建库"}
+                "ask_user": ("⚠️ 当前结果全部来自演示默认参数（不是真实设备）。"
+                             "建议建立设备库——只需提供激光器、探测器、采集卡、光学系统的型号，"
+                             "系统会自动查规格书并录入。之后每次仿真使用真实硬件参数，结果更贴近实际。"),
+                "how": "提供设备型号（如 NI USB-6211、Thorlabs PDA10D2），系统自动建库"}
     missing = [k for k, v in counts.items() if v == 0]
     # 对 AI 与用户都只认中文名：直接输出 'pd' 不利于转述，也不利于用户理解缺什么。
     missing_cn = [{"device_type": k, "cn": _DEVICE_TYPE_CN[k],
@@ -219,7 +219,7 @@ def _packing_state(out=None):
         return {"should_prompt": True, "reason": "has_setup_no_default",
                 "setups": sorted(setups.keys()),
                 "ask_user": ("已有整机配置，但未设默认。设默认后，"
-                             "未指定设备时会自动套用你的真实硬件（而非内置默认）。"),
+                             "未指定设备时会自动套用真实硬件（而非内置默认）。"),
                 "how": "tdlas_device action=set_default ..."}
     return {"should_prompt": False, "reason": "packed_and_defaulted",
             "note": f"已打包 {len(setups)} 套且已设默认，无需提醒。"}
@@ -353,7 +353,7 @@ def build_next_actions(out):
 
 
 def _figure_check(png_path, r, multi=None):
-    """出图自检：机器检查图片质量，AI 不用读图也能知道有没有问题。
+    """绘图自检：机器检查图片质量，AI 不用读图也能知道有没有问题。
 
     检查项：
     - file_exists: png 文件存在
@@ -777,7 +777,7 @@ def t_simulate(species="H2O", wn0=7185.596, T=None, P=None, x=None, L=None,
     """DAS + 免标定 WMS 正向仿真：返回 1f、2f 峰高、DAS 最小透过率、线表信息。
 
     wn0 为目标线中心（cm^-1）；x 为摩尔分数（默认 1e-3 = 1000 ppm，弱吸收）；L 为光程 cm；
-    a 为调制深度 cm^-1。sigma_tau 为等效透过率噪声（默认 0=理想无噪）。save_png=True 时出图。
+    a 为调制深度 cm^-1。sigma_tau 为等效透过率噪声（默认 0=理想无噪）。save_png=True 时绘图。
     T/P/x/L 未给出时按「会话已确认 > 默认」取值（复用 tdlas_session 已确认的工况）。
     """
     if mixture is not None and x_list is not None:
@@ -1038,7 +1038,7 @@ def t_calibration_curve(species="CH4", wn0=2968.5, T=296.0, P=1.01325,
     """标定曲线：扫多个浓度，看 2f 峰高与浓度的线性关系。
 
     x_list: 浓度列表（默认 5 个：0.5x, 1x, 2x, 5x, 10x）
-    返回：各浓度 2f 峰高 + 线性拟合 k/R² + 可选出图
+    返回：各浓度 2f 峰高 + 线性拟合 k/R² + 可选绘图
     """
     import numpy as np
 
@@ -1259,7 +1259,7 @@ def t_das_chain(species="H2O", wn0=7185.596, T=None, P=None, x=None, L=None,
 # 输出凭据（provenance）：让一个数可被第三方重建
 # ───────────────────────────────────────────────────────────────
 # 为什么需要："能承担系统选型与方法验证的责任"的前提是**可被引用**，
-# 而可被引用的最低门槛是：别人拿到你的数，能重建出同一个数。
+# 而可被引用的最低门槛是：别人拿到数据，能重建出同一个数。
 # 此前输出里有条件（T/P/x/L）、seed、线表名，**但没有版本与数据指纹**——
 # 而 HITRAN 会定期更新线表，同名表的内容会变。
 def _engine_version():
@@ -1496,7 +1496,7 @@ def _maybe_align_laser(wn_center, inst, explicit_keys, device_used=False):
             f"（wn_ref={old:g}、dν/dI={float(dnu_dI):g}、驱动器 "
             f"{ts.DRIVER_V_LO:.0f}–{ts.DRIVER_V_HI:.0f} V，原参数反算 offset_V：{_off_txt}）"
             f"→ **已自动把 wn_ref 重锚到 {info['wn_ref_auto']:.6g} cm⁻¹**（理想激光器假设，"
-            f"其余激光参数未变）。这不是你的真实硬件：请提供实测 wn_ref/dν/dI，或用 tdlas_device "
+            f"其余激光参数未变）。这不是真实硬件：请提供实测 wn_ref/dν/dI，或用 tdlas_device "
             f"保存真实激光器后以 laser= 引用；确认后本提示消失。")
     if _auto_note:
         note = _auto_note + " " + note
@@ -1625,7 +1625,7 @@ def t_das_instrument(species="CH4", wn_center=2968.5, T=None, P=None, x=None, L_
            "needs_confirm": bool(assumed),   # 与 WMS 同口径：有默认值就需用户确认
            "clarify": {"needed": bool(requests),
                        "instruction": "needed=True 时：**先向用户提出 questions 里的澄清问题，"
-                                      "收到回答前不要直接出图/下结论**。用户明确说'用默认值'才可跳过。"
+                                      "收到回答前不要直接绘图/下结论**。用户明确说'用默认值'才可跳过。"
                                       "**用原生结构化提问工具（AskUserQuestion 类点击式选择框）渲染，"
                                       "禁止纯文字列表**；1 次 1–4 题，超过 4 题按优先级分批多轮。",
                        "questions": _clarify_qs},
@@ -1885,7 +1885,7 @@ def t_wms_instrument(species="CH4", wn_center=2968.5, T=None, P=None, x=None, L_
            "needs_input": bool(requests),
            "clarify": {"needed": bool(requests),
                        "instruction": "needed=True 时：**先向用户提出 questions 里的澄清问题，"
-                                      "收到回答前不要直接出图/下结论**。用户明确说'用默认值'才可跳过。"
+                                      "收到回答前不要直接绘图/下结论**。用户明确说'用默认值'才可跳过。"
                                       "**用原生结构化提问工具（AskUserQuestion 类点击式选择框）渲染，"
                                       "禁止纯文字列表**；1 次 1–4 题，超过 4 题按优先级分批多轮。",
                        "questions": _clarify_qs},
@@ -2023,7 +2023,7 @@ def t_wms_instrument(species="CH4", wn_center=2968.5, T=None, P=None, x=None, L_
         with _quiet():
             ts.plot_wms_instrument(r, png, multi=_multi_draw)
         out["png"] = str(png)
-        # 出图自检：机器检查图片质量，AI 不用读图也能知道有没有问题
+        # 绘图自检：机器检查图片质量，AI 不用读图也能知道有没有问题
         out["figure_check"] = _figure_check(png, r, _multi_draw)
     if return_xy and "X1f_c" in r:                  # BUG-D 修复：透出锁相正交 X/Y 分量
         # ⚠ 必须转 list：这些是 numpy ndarray，直接入返回体会在 JSON-RPC
@@ -2049,7 +2049,7 @@ def t_baseline_simulate(species="CO", wn_center=2183.22, T=296.0, P=1.01325,
                         baseline_das=None, baseline_wms=None, save_png=False):
     """实测基线 WMS 仿真：用 0 ppm（氮气/零气）实测原始信号当 I0，叠加理论吸收。
 
-    与纯理论仿真的区别：I0 不再取理想常数或理论 P-I 模型，而是**你自己的实测背景**，
+    与纯理论仿真的区别：I0 不再取理想常数或理论 P-I 模型，而是**实测背景**，
     因而保留真实的 AM 残余（RAM）、干涉条纹、探测器响应与基线漂移。
     这是"免标定"从公式落到实测的第一步：先在零气上量出真实 I0，再把理论吸收叠上去。
 
@@ -2176,7 +2176,7 @@ def t_baseline_simulate(species="CO", wn_center=2183.22, T=296.0, P=1.01325,
     }
     out["provenance"] = provenance_block(out, info.get("table"))
     out["note"] = ("实测基线只替换 I0；吸收项仍是 HITRAN 理论值，故本工具输出的是"
-                   "「你的真实光源/探测器 + 理论吸收」的合成结果，不是纯实验数据。"
+                   "「真实光源/探测器 + 理论吸收」的合成结果，不是纯实验数据。"
                    "三角波在谷底/峰顶驻留，该段会被滑动去趋势抹平，图上可能呈平台——"
                    "这是解调滤波的表现，不代表物理吸收。")
 
@@ -2702,8 +2702,8 @@ def t_calibfree(mode="guide", species="CO2", wn_center_cm1=None,
     """
     if mode == "guide":
         return {"mode": "guide", "ok": True, "guide": _cf.GUIDE,
-                "try_this": "mode=shape + data_path=你的2f.csv（列 x2f,y2f,x2f_bg,y2f_bg）",
-                "note": "配齐三类数据即可开跑；有 I0 或已知浓度参考时，直接出浓度。"}
+                "try_this": "mode=shape + data_path=<2f.csv>（列 x2f,y2f,x2f_bg,y2f_bg）",
+                "note": "配齐三类数据后即可开始分析；有 I0 或已知浓度参考时，可直接输出浓度。"}
 
     if mode not in ("shape", "absolute", "anchored"):
         raise ValueError(f"mode 必须是 guide/shape/absolute/anchored，收到 {mode!r}")
@@ -2713,6 +2713,8 @@ def t_calibfree(mode="guide", species="CO2", wn_center_cm1=None,
         raise ValueError(f"mode={mode} 需要 wn_center_cm1（选线中心波数 cm⁻¹）")
     if float(L_cm) <= 0:
         raise ValueError("L_cm 必须 >0")
+    if float(T) <= 0 or float(P) <= 0:
+        raise ValueError("T 与 P 必须 >0（T 单位 K，P 单位 atm）")
 
     ds = None
     if data_path:
@@ -2735,7 +2737,7 @@ def t_calibfree(mode="guide", species="CO2", wn_center_cm1=None,
                                   scan_span_cm1=scan_span_cm1,
                                   line_center_index=line_center_index)
         out["next_step"] = ("形状 corr≥0.99 后：有 I0 走 mode=absolute；"
-                            "有已知浓度参考走 mode=anchored。单路 2f 永远不报 x。")
+                            "有已知浓度参考走 mode=anchored。shape 仅输出波形参数，不输出浓度。")
 
     elif mode == "absolute":
         ia = _cf_pick(ds, "i", i)
@@ -2832,7 +2834,7 @@ TOOLS = [
                          "sigma_tau": {"type": "number", "description": "等效透过率噪声，默认 0"},
                          "seed": {"type": "integer"},
                          "iso": {"type": "string", "description": "同位素模式：默认不传=主同位素（历史口径）；\"all\"=该分子全部 HITRAN 同位素按丰度叠加（密集谱区 ¹³CH₄ 等邻近线贡献不可忽略，峰形更贴近实测）；整数=指定同位素编号。"},
-                         "save_png": {"type": "boolean", "description": "是否出图，默认 False"}},
+                         "save_png": {"type": "boolean", "description": "是否绘图，默认 False"}},
                      "required": ["species", "wn0"]}},
     {"name": "tdlas_das_chain",
      "description": "DAS 时域链路：PD 原始信号 → 基线拟合 → 吸光度。"
@@ -2997,7 +2999,7 @@ TOOLS = [
                          "lock_kind": {"type": "string", "enum": ["boxcar", "butter"],
                                        "description": "锁相低通实现：'boxcar'（默认，矩形窗滑动平均，零点精确落在 fm 整数倍 → 2fm/4fm 数值零泄漏）"
                                                       "或 'butter'（scipy Butterworth，阶数=lockin_stages、建议 4，截止=cutoff_ratio·fm、建议 0.25=fm/4）。"
-                                                      "硬件若只有 Butterworth，传 lock_kind='butter' 即可在仿真里复现你的器件"},
+                                                      "硬件若只有 Butterworth，传 lock_kind='butter' 即可在仿真里复现器件"},
                          "zero_phase": {"type": "boolean",
                                        "description": "零相位锁相（filtfilt 正滤+倒滤，每级=2次滤波、等效衰减翻倍）。对 butter：消除 lfilter 群延迟、峰位对齐真值（n_stages=2→约4阶，|H(2fm)|≈-72dB）；"
                                                       "对 boxcar：默认(mode='same')已零相位、无需开；开启后每级走 filtfilt、n_stages=2 即 4 次卷积=sinc^4（比默认 2 次=sinc^2 零点更深）、峰位不变。"
@@ -3233,7 +3235,7 @@ TOOLS = [
                          "sigma_tau": {"type": "number", "description": "等效透过率噪声，默认 1e-5"},
                          "n_trials": {"type": "integer", "description": "每格蒙特卡洛次数，默认 10"},
                          "n_sigma": {"type": "number"}, "seed": {"type": "integer"},
-                         "save_png": {"type": "boolean", "description": "是否出图，默认 False"}},
+                         "save_png": {"type": "boolean", "description": "是否绘图，默认 False"}},
                      "required": []}},
     {"name": "tdlas_calibration_curve",
      "description": "标定曲线：浓度 vs 2f/1f 峰高（线性/非线性拟合）。",
@@ -3244,7 +3246,7 @@ TOOLS = [
          "P": {"type": "number", "description": "压力 atm"},
          "L": {"type": "number", "description": "光程 cm"},
          "x_list": {"type": "array", "items": {"type": "number"}, "description": "浓度列表（默认 5 个）"},
-         "save_png": {"type": "boolean", "description": "是否出图"}
+         "save_png": {"type": "boolean", "description": "是否绘图"}
      }, "required": ["species", "wn0"]}},
     {"name": "tdlas_export",
      "description": "导出结果为 CSV/JSON。",
@@ -3260,12 +3262,12 @@ TOOLS = [
          "fs": {"type": "number", "description": "采样率 (Hz)"},
          "max_tau": {"type": "number", "description": "最长平均时间 (s)，默认总时长一半"},
          "tau_points": {"type": "integer", "description": "τ 轴采样点数（对数均匀，默认 100）"},
-         "save_png": {"type": "boolean", "description": "是否出图"}
+         "save_png": {"type": "boolean", "description": "是否绘图"}
      }, "required": ["signal", "fs"]}},
     {"name": "tdlas_baseline_simulate",
      "description": "实测基线 WMS 仿真：把 0 ppm（氮气/零气）的实测原始信号当 I0 基线，"
                     "叠加 HITRAN 理论吸收，输出 1f/2f 谐波与 2f/1f。"
-                    "与 tdlas_wms_instrument 的区别：I0 用你的**真实背景**（含 RAM、干涉条纹、"
+                    "与 tdlas_wms_instrument 的区别：I0 用**实测背景**（含 RAM、干涉条纹、"
                     "探测器响应、基线漂移），而不是理想常数或理论 P-I 模型 —— 这是免标定落地实测的第一步。"
                     "两路基线都可省略（省略即理想 I0=1，退化为纯理论仿真，validation 会 warn）。"
                     "弱吸收 αL≪1 时 2f 才正比于浓度；超限会告警。",
@@ -3293,8 +3295,8 @@ TOOLS = [
                       "description": "是否出 4 子图（原始信号 / 1f / 2f / 2f·1f）"}},
       "required": ["species", "wn_center"]}},
     {"name": "tdlas_calibfree",
-     "description": "免标定入口（TDLAS）：guide 给新手数据清单；shape 只用 2f 定 m/扫描轴/复增益"
-                    "（x 恒为 null，单路 2f 不能定浓度）；absolute 用 I/I0 做 DAS 绝对反演；"
+     "description": "免标定入口（TDLAS）：guide 提供最小数据清单；shape 用 2f 定 m/扫描轴/复增益"
+                    "（仅输出波形参数，浓度由 absolute/anchored 给出）；absolute 用 I/I0 做 DAS 绝对反演；"
                     "anchored 用已知浓度参考的峰高比跨浓度。数据可传数组或 CSV/NPZ 路径。",
      "inputSchema": {"type": "object", "properties": {
          "mode": {"type": "string", "enum": ["guide", "shape", "absolute", "anchored"],
@@ -3340,7 +3342,7 @@ TOOLS = [
 
 # tdlas_review 与 tdlas_wms_instrument 的参数**完全同源**（实现上就是透传），
 # 手工维护两份属性表迟早漂移（历史上就发生过：review 缺硬件参数、wms 缺 session_id）。
-# 这里在定义后直接把 wms 的属性集复制过去，只去掉出图开关，保证两者**永不脱节**。
+# 这里在定义后直接把 wms 的属性集复制过去，只去掉绘图开关，保证两者**永不脱节**。
 def _sync_review_schema():
     by = {t["name"]: t for t in TOOLS}
     _wms_props = by["tdlas_wms_instrument"]["inputSchema"]["properties"]

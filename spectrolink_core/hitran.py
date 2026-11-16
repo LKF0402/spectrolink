@@ -11,7 +11,7 @@ HAPI 1.x 精简封装（自包含，不依赖外部仓库）。
 设计纪律（沿用 hitran-mcp 的审计结论）：
   · 窗口安全：线表必须真正覆盖请求窗口**及其翼宽**（窗外 ±fetch_margin 的线其翼
     仍会落进计算窗，只抓窗内线会静默偏低，实测窗左缘 −2.74%），否则按窗口重抓；
-  · 空谱硬报错：窗口内 0 条线 / 抓取失败直接 raise，绝不静默返回平谱；
+  · 空谱显式报错：窗口内 0 条线 / 抓取失败直接 raise，绝不静默返回平谱；
   · 单位：波数 cm^-1、温度 K、压力 atm、线翼半宽 cm^-1。
 """
 from __future__ import annotations
@@ -300,7 +300,7 @@ def _absorption_uncached(name, numin, numax, T=296.0, P=1.01325, step=5e-4, wing
             try:
                 tbl, _cov = fetch_table(formula, M, e["I"], gmin, gmax)
             except RuntimeError as ex:
-                # all 模式下：主同位素失败 = 真故障（网络/服务端），必须硬报错；
+                # all 模式下：主同位素失败 = 真故障（网络/服务端），必须显式报错；
                 # 非主（稀有）同位素某窗口无谱线属正常（HITRAN 对空窗口返回 404），
                 # 一律跳过并披露，不当作故障、不中断整谱叠加。
                 if e["I"] == main_iso:

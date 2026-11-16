@@ -12,7 +12,7 @@
   1. schema ↔ 函数签名一致性（双向）
   2. 参数真的透传到引擎（用假引擎记录 kwargs，不跑仿真）
   3. 目标波数越界时自动重锚 wn_ref；显式给激光参数/设备引用时不介入
-  4. SPECIES_PROFILES 的每个推荐波段在自动重锚后可跑通
+  4. SPECIES_PROFILES 的每个推荐波段在自动重锚后可验证
   5. 未知键 / 类型错误被拒绝（不再静默丢弃）
   6. JSON-RPC 批量请求、未知工具、ping
   7. 文件名净化、默认 seed 可复现、会话原子写
@@ -352,7 +352,7 @@ check("默认 seed=0（结果可复现）",
 check("session_id 已在 wms/review/das 的 schema 中",
       all("session_id" in (next(t for t in M.TOOLS if t["name"] == n)["inputSchema"]["properties"])
           for n in ("tdlas_wms_instrument", "tdlas_review", "tdlas_das_instrument")))
-check("review 的 schema 与 wms 同源（除出图开关）",
+check("review 的 schema 与 wms 同源（除绘图开关）",
       set(next(t for t in M.TOOLS if t["name"] == "tdlas_review")["inputSchema"]["properties"])
       >= set(next(t for t in M.TOOLS if t["name"] == "tdlas_wms_instrument")["inputSchema"]["properties"]) - {"save_png"})
 # 反演的**配对量**必须是 S2f_norm_peak（sensitivity_k 的分子），不是 S2f1f_peak ——

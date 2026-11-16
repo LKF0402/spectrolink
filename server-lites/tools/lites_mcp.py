@@ -13,7 +13,7 @@
   · lites_device           器件库（list / get / build）
   · lites_resonance        共振跟踪与温漂分析
   · lites_compare          多器件统一口径对比
-  · lites_review           实验方案评审（7 类已知失效模式）
+  · lites_review           实验方案评审（7 类已知关键风险点）
   · lites_guide            交互协议与参数索取指南
   · lites_selftest         全链路自检
 
@@ -183,7 +183,7 @@ def build_next_actions(out):
              if isinstance(f, dict) and f.get("level") == "warn"]
     if _warn:
         add("disclose_review_warnings", _SEV_DISCLOSE,
-            "逐条说明 review 的 warn 项（优化前先解决失效模式，不要只报 ok 项）",
+            "逐条说明 review 的 warn 项（优化前先解决关键风险点，不要只报 ok 项）",
             ["findings"], values={"items": [f.get("item") for f in _warn][:6],
                                   "count": len(_warn)})
     # ④ 默认值披露：assumptions 是完整句子，逐项转述（不能只报个数）
@@ -220,7 +220,7 @@ def _get_session(session_id="default"):
 # LITES 不需要「波段选择 / 激光可达性」：它不建模激光调谐，波长只通过
 # `lites_forward(wn_cm1=...)` 影响 QTF 器件吸收率，线强由调用方显式给出。
 # 因此这里不再保留 TDLAS 式的物种推荐表、激光可达性表与散文交互协议；
-# 真正对外的话术以本文件 `build_next_actions`（机器可读动作）与 server-lites/SKILL.md 为准。
+# 真正对外的文案以本文件 `build_next_actions`（机器可读动作）与 server-lites/SKILL.md 为准。
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -506,7 +506,7 @@ TOOLS = [{
     },
 }, {
     "name": "lites_waveform",
-    "description": "【合成 2f 波形 + 仪器级出图】沿慢扫三角波逐点计算，生成完整 2f 波形，并输出 6 子图（吸收线型 / 机械传递函数 / 热扩散低通 / 2f 信号 / 扣基线后 / 噪声预算）。注意基线**故意不置零** —— 这是 LITES 的真实特征，扣基线动作由调用方决定。",
+    "description": "【合成 2f 波形 + 仪器级绘图】沿慢扫三角波逐点计算，生成完整 2f 波形，并输出 6 子图（吸收线型 / 机械传递函数 / 热扩散低通 / 2f 信号 / 扣基线后 / 噪声预算）。注意基线**故意不置零** —— 这是 LITES 的真实特征，扣基线动作由调用方决定。",
     "inputSchema": {
         "type": "object",
         "properties": {
@@ -568,7 +568,7 @@ TOOLS = [{
             },
             "save_png": {
                 "type": "boolean",
-                "description": "是否出图，默认 true",
+                "description": "是否绘图，默认 true",
             },
             "out_path": {
                 "type": "string",
@@ -808,7 +808,7 @@ TOOLS = [{
     },
 }, {
     "name": "lites_review",
-    "description": "【实验方案评审】按 LITES 的 7 类已知失效模式逐条检查给定方案，返回 verdict + 逐条 finding（含严重度与建议）。7 类失效模式：η_dev 未标定 / 基线漂移误判为信号 / 共振失谐 / 热扩散截止压制 2f / 1/f 噪声主导被误当白噪声 / MPC 吞吐损失被忽略 / 光功率密度超损伤阈值。",
+    "description": "【实验方案评审】按 LITES 的 7 类关键风险点逐项检查给定方案，返回 verdict + 逐条 finding（含严重度与建议）。7 类风险点：η_dev 未锚定 / 基线漂移误判为信号 / 共振失谐 / 热扩散截止压制 2f / 1/f 噪声主导被误当白噪声 / MPC 吞吐损失被忽略 / 光功率密度超损伤阈值。",
     "inputSchema": {
         "type": "object",
         "properties": {

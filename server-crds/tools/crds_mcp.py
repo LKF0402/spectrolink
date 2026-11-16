@@ -59,7 +59,7 @@ def _mpl_cjk():
 
 def _plot_crds(L_m, R, x, nu0, nu_span, n_nu, T, P, species, iso,
                alpha_pk_fallback, gamma_fallback, fit_noise, seed, out_path):
-    """CRDS 2×2 横版出图：(a) τ(ν) 衰荡时间谱 (b) α(ν) 单程吸收谱
+    """CRDS 2×2 横版绘图：(a) τ(ν) 衰荡时间谱 (b) α(ν) 单程吸收谱
     (c) 峰位 ring-down + 对数线性拟合 (d) τ 峰缩短 vs 浓度（动态范围）。"""
     import matplotlib
     matplotlib.use("Agg")

@@ -19,7 +19,7 @@
 设计纪律
 ────────
 1. **不许手工维护"是否实现"**：``audit_effects`` 会去源码里找证据，找不到就报 FAIL。
-2. **合法通道白名单必须显式**：设备引用/会话/出图开关不进引擎是**设计如此**，
+2. **合法通道白名单必须显式**：设备引用/会话/绘图开关不进引擎是**设计如此**，
    白名单之外的一切"声明了却没进引擎"都是缺陷。
 3. 这一层不跑仿真、不访问 HITRAN、不启服务器 —— 与 ``contract_check.py`` 同一纪律。
 
@@ -210,7 +210,7 @@ EFFECTS = [
 NON_ENGINE_CHANNELS = {
     "setup", "laser", "pd", "daq", "optics",   # 设备库引用：由 _resolve_devices 解析
     "session_id",                              # 会话态（跨会话记忆）
-    "save_png",                                # 出图开关
+    "save_png",                                # 绘图开关
     "auto_laser",                              # 目标波数越界时的自动重锚开关
     "x_list",                                  # 多浓度扫描：MCP 层循环驱动，不进引擎（见 _resolve_x_list）
 }

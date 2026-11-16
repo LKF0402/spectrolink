@@ -87,7 +87,7 @@ TOOLS = [
          ["var"]),
 
     tool("lites_waveform",
-         "【合成 2f 波形 + 仪器级出图】沿慢扫三角波逐点计算，生成完整 2f 波形，"
+         "【合成 2f 波形 + 仪器级绘图】沿慢扫三角波逐点计算，生成完整 2f 波形，"
          "并输出 6 子图（吸收线型 / 机械传递函数 / 热扩散低通 / 2f 信号 / 扣基线后 / 噪声预算）。"
          "注意基线**故意不置零** —— 这是 LITES 的真实特征，扣基线动作由调用方决定。",
          {**COND,
@@ -98,7 +98,7 @@ TOOLS = [
           "n_scan": {"type": "integer", "description": "扫描采样点数，默认 4000"},
           "sigma_V": {**X, "description": "输出电压噪声 V，默认 9.16e-6"},
           "seed": {"type": "integer", "description": "噪声随机种子"},
-          "save_png": {"type": "boolean", "description": "是否出图，默认 true"},
+          "save_png": {"type": "boolean", "description": "是否绘图，默认 true"},
           "out_path": {"type": "string",
                        "description": "PNG 输出路径；缺省 = docs/assets/lites_waveform.png"},
           "gas": {"type": "string", "description": "HITRAN 分子式（如 CH4 / H2O）；给出则用真实"
@@ -182,9 +182,9 @@ TOOLS = [
                       "description": "要输出的指标名，默认 ['V_delta','SNR','MDL']"}}),
 
     tool("lites_review",
-         "【实验方案评审】按 LITES 的 7 类已知失效模式逐条检查给定方案，"
+         "【实验方案评审】按 LITES 的 7 类关键风险点逐项检查给定方案，"
          "返回 verdict + 逐条 finding（含严重度与建议）。"
-         "7 类失效模式：η_dev 未标定 / 基线漂移误判为信号 / 共振失谐 / "
+         "7 类风险点：η_dev 未锚定 / 基线漂移误判为信号 / 共振失谐 / "
          "热扩散截止压制 2f / 1/f 噪声主导被误当白噪声 / "
          "MPC 吞吐损失被忽略 / 光功率密度超损伤阈值。",
          {**COND,

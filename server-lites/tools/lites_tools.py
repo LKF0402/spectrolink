@@ -5,7 +5,7 @@
 与 TDLAS 工具集的关系
 ─────────────────────
 本模块**不复用** tdlas 的任何工具语义。虽然两者都做"激光光谱气体检测仿真"，
-但物理链、可调参数、失效模式完全不同（见 lites_physics 模块头）。沿用 TDLAS
+但物理链、可调参数、关键风险点完全不同（见 lites_physics 模块头）。沿用 TDLAS
 的入参名（如 sigma_tau、2f/1f）会误导使用者，因此这里**重新定义**工具与口径。
 
 工具一览（13 个）
@@ -13,7 +13,7 @@
   建模/前向
     lites_forward          单点 2f 电压预测（含"线上/线外"分解）
     lites_sweep            参数扫描：功率/浓度/光程/调制频率/f0 漂移
-    lites_waveform         2f 波形合成 + 可选出图（仪器级 6 子图）
+    lites_waveform         2f 波形合成 + 可选绘图（仪器级 6 子图）
   反演/指标
     lites_invert           由实测 2f 电压反演气体浓度
     lites_mdl              最小可探测浓度（含 Allan 积分改善）
@@ -402,7 +402,7 @@ def lites_sweep(device=lph.DEFAULT_DEVICE, var="power_mW", values=None,
 
 
 # ══════════════════════════════════════════════════════════════════════
-# 3. 波形：仪器级 2f 信号合成 + 出图
+# 3. 波形：仪器级 2f 信号合成 + 绘图
 # ══════════════════════════════════════════════════════════════════════
 
 def _quad_demod_profile(alpha_prof, nu, hwhm, mod_depth_cm1,
@@ -458,7 +458,7 @@ def lites_waveform(device=lph.DEFAULT_DEVICE, power_mW=None, x=None,
       4. 乘以器件频率响应 |H_th(f_m)|·τ_acc·|H_mech(2f_m)| 与标定增益 g
       5. 加噪声（1/f + 白）
 
-    ⚠ 与 TDLAS 出图的关键差别：LITES 的 2f **不归零**。因为激光 WMS
+    ⚠ 与 TDLAS 绘图的关键差别：LITES 的 2f **不归零**。因为激光 WMS
       残余幅度调制的 2f 分量（am_2f_frac）是与浓度无关的常量本底，
       真实 LITES 谱线是"骑在本底上的 2f 峰"；气体信号 ∝ η_dev·αL
       （减光口径，2026-10 文献修正）。若强行扣基线，会低估检测限。
@@ -1357,14 +1357,14 @@ def lites_compare(devices=None, common=None, metrics=("V_delta", "SNR", "MDL")):
 def lites_review(device=lph.DEFAULT_DEVICE, power_mW=None, x=None, L_gas_cm=None,
                  f_m=None, mod_depth_cm1=None, line_strength=None,
                  T=296.0, P=1.01325, gamma_L=0.06, sigma_V=None):
-    """对一套 LITES 实验方案做**逐项体检**，指出问题而不是给好评。
+    """对一套 LITES 实验方案做逐项检查，返回 verdict 与结构化 findings。
 
-    检查项依据文献中真实出现过的失效模式：
-      1. 调制深度 m 是否接近 2.2（偏离则损失信号）
+    检查项覆盖文献中常见的关键风险点：
+      1. 调制深度 m 是否接近 2.2（偏离时信号效率下降）
       2. f_m 是否等于 f0/2，以及是否应下移到热-机械联合最优
-      3. Q 与 f0 是否会导致共振跟踪困难（带宽 vs 温漂）
-      4. 是否把"基线"误当成零（LITES 最常见的定量误差）
-      5. 多通池的功率损失是否吃掉了吸收增益
+      3. Q 与 f0 是否会导致共振跟踪困难（带宽与温漂的权衡）
+      4. 是否把基线误当成零（LITES 常见的定量误差来源）
+      5. 多通池的功率损失是否抵消了吸收增益
       6. 噪声是否被 1/f 主导，积分时间是否存在最优
       7. 弱吸收线性假设是否成立
     """
@@ -1602,55 +1602,53 @@ _GUIDE = {
         ),
     },
     "pitfalls": {
-        "title": "七个真实失效模式",
+        "title": "使用要点",
         "body": (
-            "1. **把 V_2f 总量当信号**——它含与浓度无关的基线偏置，必须扣。\n"
-            "2. **以为加浓度就能改善检测限**——LITES 灵敏度被 η_dev 压制，"
-            "加大浓度只线性改善分子、压不掉器件吸收本底。\n"
-            "3. **忽略共振温漂**——Q 越高带宽越窄，1 K 就可能失谐。\n"
-            "4. **以为多通池与 TDLAS 一样净赚**——LITES 信号 ∝ P，镜面反射吃掉功率。\n"
-            "5. **以为提 Q 就能线性降噪**——1/f 主导时 Q 的收益远小于 √Δf。\n"
-            "6. **复用 TDLAS 的 σ_τ 口径**——LITES 链里没有'透过率'这个量。\n"
-            "7. **把模型当第一性原理**——g 与 η_dev 都是反解/反推量，须实测回填。"
+            "1. **先扣除与浓度无关的基线偏置**：V_2f 总量含基线，扣除后再读取信号。\n"
+            "2. **检测限由器件本底与共振带宽共同决定**：提高浓度改善分子信号，器件本底通过空白基线扣除。\n"
+            "3. **关注共振温漂**：Q 越高带宽越窄，建议同步记录 f0/Q 与温度。\n"
+            "4. **多通池需同步记录功率**：镜面反射会降低到达功率，信号与功率监测应成对采集。\n"
+            "5. **噪声以 1/f 为主时关注积分时间**：共振带宽与积分时间共同决定信噪比。\n"
+            "6. **采用 LITES 自身信号链口径**：以 2f 电压与功率/共振归一化描述，不套用透过率定义。\n"
+            "7. **以单点锚定回填 g 与 η_dev**：完成一次参考测量后，同器件、同波长可跨浓度输出。"
         ),
     },
     "workflow": {
         "title": "推荐使用顺序",
         "body": (
             "① lites_device action=list      选器件\n"
-            "② lites_review                  方案体检（先挑错）\n"
+            "② lites_review                  方案检查\n"
             "③ lites_forward                 单点信号量级\n"
             "④ lites_sweep                   扫功率/光程/调制频率选工作点\n"
-            "⑤ lites_waveform                出仪器级图\n"
+            "⑤ lites_waveform                生成仪器级图\n"
             "⑥ lites_mdl / lites_noise_budget 检测限与噪声归因\n"
             "⑦ lites_resonance               共振跟踪设计\n"
             "⑧ lites_compare                 多方案横评\n"
         ),
     },
     "calibration": {
-        "title": "必须实测标定的量（当前为估计值）",
+        "title": "推荐现场确认的量（支持单点锚定）",
         "body": (
-            "· η_dev  器件自身吸收比 —— 由文献 V/P 反推，须用空白基线实测\n"
-            "· g      标定增益 —— 单点反解，吸收了热约束度/电极几何/TIA 阻抗\n"
-            "· f0, Q  共振频率与品质因数 —— 标称≠真值，个体差异可达数十 %\n"
-            "· tc     f0 温度系数 —— 标称≠真值，封装应力会显著改变\n"
-            "· σ_V    系统噪声 —— 强烈建议用实测值替换模型自估\n"
-            "上述量未标定时，模型的**相对趋势**可信，**绝对值**须谨慎。"
+            "· η_dev  器件自身吸收比 —— 由空白基线获得，作为本底扣除依据\n"
+            "· g      标定增益 —— 由单点锚定反解，吸收热约束度/电极几何/TIA 阻抗\n"
+            "· f0, Q  共振频率与品质因数 —— 以实测值作为工作点\n"
+            "· tc     f0 温度系数 —— 由温度扫描获得，用于共振跟踪\n"
+            "· σ_V    系统噪声 —— 建议用实测值替换模型自估\n"
+            "完成上述锚定后，同一器件、同一波长可直接跨浓度输出结果。"
         ),
     },
 }
 
 
 def lites_guide(topic=None):
-    """LITES 使用指南：概念、信号链、失效模式、工作流、标定清单。"""
+    """LITES 使用指南：概念、信号链、使用要点、工作流、锚定清单。"""
     if topic and topic in _GUIDE:
         return {"topic": topic, **_GUIDE[topic],
                 "available_topics": sorted(_GUIDE)}
     return {"topics": {k: v["title"] for k, v in _GUIDE.items()},
             "full": _GUIDE,
             "calibfree": {"tool": "lites_calibfree", "mode": "guide",
-                          "recommended": "单点已知浓度锚定 + 功率监测 + 共振归一化",
-                          "not_recommended": "纯理论绝对免标定（η_dev 与私有 g 不可分离）"},
+                          "recommended": "单点已知浓度锚定 + 功率监测 + 共振归一化"},
             **_block()}
 
 
