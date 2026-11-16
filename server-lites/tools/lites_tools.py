@@ -8,7 +8,7 @@
 但物理链、可调参数、失效模式完全不同（见 lites_physics 模块头）。沿用 TDLAS
 的入参名（如 sigma_tau、2f/1f）会误导使用者，因此这里**重新定义**工具与口径。
 
-工具一览（10 个）
+工具一览（13 个）
 ─────────────────
   建模/前向
     lites_forward          单点 2f 电压预测（含"线上/线外"分解）
@@ -22,6 +22,8 @@
     lites_device           器件库查询与自定义器件标定
     lites_resonance        共振跟踪与温漂失谐分析
     lites_compare          多方案对比（选型/权衡表）
+  免标定
+    lites_calibfree        单点锚定 + 功率/共振归一化（guide / anchored）
   诊断
     lites_review           实验方案体检（挑错，不给"看起来不错"）
     lites_guide            用法指南
@@ -54,6 +56,7 @@ for _p in (_ROOT, _SRV):
 
 import lites_physics as lph  # noqa: E402
 import qtf_eta  # noqa: E402  QTF 全波段吸收率（η_dev 波长化）
+from spectrolink_core import calibfree as _cf  # noqa: E402  免标定共用内核
 
 try:
     from spectrolink_core import hitran as _hitran
@@ -1486,6 +1489,90 @@ def lites_review(device=lph.DEFAULT_DEVICE, power_mW=None, x=None, L_gas_cm=None
 
 
 # ══════════════════════════════════════════════════════════════════════
+# 10.5 免标定（单点锚定 + 功率/共振归一化）
+# ══════════════════════════════════════════════════════════════════════
+
+
+def _cf_peak(v):
+    """波形数组取峰值；单个数值原样返回。"""
+    if v is None:
+        return None
+    a = np.asarray(v, dtype=float).ravel()
+    if a.size == 0:
+        raise ValueError("v2f 数据为空")
+    return float(np.max(np.abs(a)))
+
+
+def lites_calibfree(mode="guide", data_path=None,
+                    v2f_sample=None, v2f_ref=None, x_ref=None,
+                    power_sample_mW=None, power_ref_mW=None,
+                    f_m_sample_Hz=None, f_m_ref_Hz=None,
+                    f0_Hz=None, Q=None,
+                    v2f_baseline_sample=None, v2f_baseline_ref=None):
+    """LITES 免标定：guide 给数据清单；anchored 做单点锚定 + 功率/共振归一化。
+
+    单点已知浓度锚定后，同一器件/波长可跨浓度免标定曲线；换器件/波长重锚一次即可。
+    """
+    if mode == "guide":
+        return {"mode": "guide", "ok": True,
+                "guide": _cf.GUIDE,
+                "lites_specific": {
+                    "principle": "V2f ∝ η_dev(λ)·α(x)L·P·H_th(f_m)·H_mech(f_m;f0,Q)·G_lockin·g",
+                    "what_cancels": "P 可测；H_th/H_mech 可由共振曲线消掉；η_dev 与私有 g 由 x_ref 锚定吸收",
+                    "recommended": "单点已知浓度锚定 + 功率监测 + 共振曲线；同器件同波长可直接跨浓度",
+                    "anchoring": "x_ref 吸收 η_dev 与私有 g；同器件同波长跨浓度，换器件/波长重锚一次即可",
+                },
+                "try_this": "mode=anchored + v2f_sample/v2f_ref/x_ref + power/共振参数"}
+
+    if mode != "anchored":
+        raise ValueError(f"lites_calibfree 只支持 guide / anchored，收到 {mode!r}")
+
+    ds = None
+    if data_path:
+        if not Path(str(data_path)).exists():
+            raise ValueError(f"data_path 不存在：{data_path}")
+        ds = _cf.dataset_from_path(str(data_path))
+
+    def pick(role, explicit):
+        if explicit is not None:
+            return explicit
+        if ds and ds.get(role) is not None:
+            return ds[role]
+        return None
+
+    v_s = _cf_peak(pick("v2f", v2f_sample))
+    v_r = _cf_peak(pick("v2f_ref", v2f_ref))
+    if v_s is None or v_r is None or x_ref is None:
+        raise ValueError("anchored 需要 v2f_sample / v2f_ref / x_ref；"
+                         "数据可传数组或 data_path（列 v2f,v2f_ref）。")
+    p_s = pick("power", power_sample_mW)
+    p_r = pick("power_ref", power_ref_mW)
+    f_s = pick("f_m", f_m_sample_Hz)
+    f_r = pick("f_m_ref", f_m_ref_Hz)
+    if f_s is not None:
+        f_s = float(np.asarray(f_s).ravel()[0])
+    if f_r is not None:
+        f_r = float(np.asarray(f_r).ravel()[0])
+
+    out = _cf.lites_anchored(
+        v_s, v_r, float(x_ref),
+        power_sample_mW=(float(np.asarray(p_s).ravel()[0]) if p_s is not None else None),
+        power_ref_mW=(float(np.asarray(p_r).ravel()[0]) if p_r is not None else None),
+        f_m_sample_Hz=f_s, f_m_ref_Hz=f_r,
+        f0_Hz=f0_Hz, Q=Q,
+        v2f_baseline_sample=v2f_baseline_sample,
+        v2f_baseline_ref=v2f_baseline_ref)
+    out["guide"] = {"title": _cf.GUIDE["title"], "one_sentence": _cf.GUIDE["one_sentence"]}
+    out["next_step"] = ("同器件、同波长、同调制/锁相条件下可直接跨浓度；"
+                        "换器件/换波长时重新锚定一次。给功率与 f_m 监测，漂移同步归一。")
+    out["scope_note"] = [
+        "单点锚定吸收 η_dev 与器件私有增益 g：同器件同波长可直接跨浓度",
+        "换器件/换波长重锚一次，结果保持一致、可追溯",
+    ]
+    return out
+
+
+# ══════════════════════════════════════════════════════════════════════
 # 11. 指南与自检
 # ══════════════════════════════════════════════════════════════════════
 
@@ -1561,6 +1648,9 @@ def lites_guide(topic=None):
                 "available_topics": sorted(_GUIDE)}
     return {"topics": {k: v["title"] for k, v in _GUIDE.items()},
             "full": _GUIDE,
+            "calibfree": {"tool": "lites_calibfree", "mode": "guide",
+                          "recommended": "单点已知浓度锚定 + 功率监测 + 共振归一化",
+                          "not_recommended": "纯理论绝对免标定（η_dev 与私有 g 不可分离）"},
             **_block()}
 
 

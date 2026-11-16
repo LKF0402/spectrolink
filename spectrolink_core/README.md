@@ -18,6 +18,7 @@ core 只放**物理量级**的纯函数（无任何技术假设）；技术口�
 | `hitran` | HITRAN 线表获取 / 本地缓存 / 指纹、Voigt 谱形、线强外推、同位素叠加、离线降级；抓取窗自动外扩（`fetch_margin`） |
 | `lockin` | 数字锁相基座：`harmonic_demod_time`（多级低通 + 谐波解调）、`phase_rotate`（正交相位校正） |
 | `stats` | Allan / LOD 基座等统计工具 |
+| `calibfree` | 免标定共用内核：`tdlas_shape` / `tdlas_das` / `anchored_ratio` / `lites_anchored`；CSV/NPZ 数据契约与 `GUIDE` |
 | `interaction` / `interaction_server` | 动作证据解析、指纹、按需下发；四技术 DISPATCH 统一包装 |
 | `validation` | 轻量 `checks[]` 与 `overall` 归并（CRDS/NDIR/FTIR/DOAS 共用） |
 
@@ -27,9 +28,10 @@ core 只放**物理量级**的纯函数（无任何技术假设）；技术口�
 - 混合气：`hitran.absorption_mixture(gases, numin, numax, T, P, step, wingHW, wn_grid=None) → (nu, alpha_total, per_gas)`，按 `α = Σ xᵢ·αᵢ` 逐点相加，**不用 x·P 当分压**
 - 抓取窗外扩量：`hitran.fetch_margin(wingHW=20.0, P=1.01325)` → cm⁻¹（覆盖 ΩWingHW·Γ 的实际翼宽，下限 1.5 cm⁻¹）
 - 锁相：`lockin.harmonic_demod_time(S, t, fs, fm, n, ...)` / `lockin.phase_rotate(X, Y, center_idx=None)`
+- 免标定：`calibfree.tdlas_shape(x2f, y2f, x2f_bg, y2f_bg, species=..., wn_center_cm1=..., L_cm=...)`（`x=null`）；`calibfree.tdlas_das(i, i0, ...)`；`calibfree.anchored_ratio(...)`；`calibfree.lites_anchored(...)`
 
 > **抓取窗 ≠ 计算窗**：线表按 `[numin - margin, numax + margin]` 抓取，输出网格仍严格等于 `[numin, numax]`。
-> 只抓窗内线会让窗外谱线的翼部被静默丢弃（CH₄ 2968 cm⁻¹ 窗左缘曾偏低 −2.74%）。
+> 外扩后窗缘偏差压到 0.01% 以内（CH₄ 2968 cm⁻¹ 实测），峰值保持一致。
 
 ## 缓存
 

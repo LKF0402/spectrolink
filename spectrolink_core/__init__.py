@@ -5,5 +5,6 @@
 """
 from . import hitran
 from . import stats
+from . import calibfree
 
-__all__ = ["hitran", "stats"]
+__all__ = ["hitran", "stats", "calibfree"]

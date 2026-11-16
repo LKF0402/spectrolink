@@ -47,6 +47,12 @@ description: SpectroLink —— 多技术光谱传感仿真 MCP 总入口。触�
 - **出图**：用户说"画图"必须传 `save_png=true`；纵轴只按有效数据区定；图面注明技术名、关键参数与"理论仿真"。
 - **自检**：每个 server 提供 `*_selftest`；改代码后全量回归。
 
+## 3.1 免标定（仅 TDLAS / LITES，v1.1.0）
+
+- **TDLAS**：`tdlas_calibfree` 三种模式——`shape`（波形一致性，`x=null`）、`absolute`（需 I0 透射）、`anchored`（单点已知浓度）。浓度走 `absolute` / `anchored`。
+- **LITES**：`lites_calibfree` 只做 `anchored`（单点参考 + 功率监测 + 共振归一化）。单点锚定后，同器件、同波长可跨浓度直接出结果。
+- **新手数据清单**：零基线（0% 气/暗）+ 绝对锚点（I0/参考浓度）+ 仪器状态（L/T/P/调制/锁相/采样）；详见 `docs/CALIB_FREE.md`。
+
 ## 4. 物理内核与数据
 
 - 共用 `spectrolink_core`（HITRAN 线表/吸收谱 + 数字锁相基座 `lockin`），本地缓存 `Hitran_Data/`；首次下载慢，已缓存后快。

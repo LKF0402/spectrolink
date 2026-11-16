@@ -2,6 +2,17 @@
 
 本文件以最简形式记录功能演进（不做过程细节罗列）。
 
+## [1.1.0] — 2026-11-16
+
+**免标定（仅 TDLAS / LITES）**：新增 `spectrolink_core/calibfree.py` 共用内核与两个 MCP 工具，不新增 server、不拆仓库。
+
+- `tdlas_calibfree`：`guide` / `shape` / `absolute` / `anchored`。`shape` 只回波形一致性、m、扫描轴、复增益/相位，`x=null`；`absolute` 需同光路 0% 气 I0；`anchored` 用单点已知浓度比值。
+- `lites_calibfree`：`guide` / `anchored`。单点已知浓度 + 功率监测 + f0/Q 共振归一化，跨浓度稳定出结果。
+- 新手数据契约：`docs/CALIB_FREE.md`（零基线 / 绝对锚点 / 仪器状态 + CSV 列名 + 实验前后检查表）与 `docs/calib_free_meta_template.json`。
+- 工具计数 43→45，离线契约自检 191→193 项；`tdlas_guide` / `lites_guide` 增加免标定入口。
+- 数据读取容错：背景单独文件可直接用 `x2f,y2f` / `i` 基列（自动回退），`f_m_Hz` / `fm_ref_Hz` 等常见列名可识别；两 server 的 `--selftest` 均已纳入 `calibfree` 可逆性检查。
+- 实测验证：2f 形状 corr >0.99；跨浓度 2f corr >0.99、线性 R² >0.99；DAS 跨浓度线性 R² >0.99。
+
 ## [1.0.0] — 2026-11-16
 
 **首个正式版本**：7 技术（TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS）、6 个 MCP server、共用 `spectrolink_core` 物理内核；统一交互契约与校验层（各技术不再只有一句 `overall=warn`）、协议层单一实现（JSON-RPC 语义只此一份）、部署形态收敛为本地 stdio。离线契约自检 191 项与保真度审计同为 CI 硬门禁。

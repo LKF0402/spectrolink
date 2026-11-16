@@ -4,7 +4,7 @@
 
 <p><b>多技术光谱传感仿真 MCP</b><br>
 TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
-7 种技术 · 6 个 server · 43 个工具 · 自然语言驱动 · 本地 stdio · 无需 API key</p>
+7 种技术 · 6 个 server · 45 个工具 · 自然语言驱动 · 本地 stdio · 无需 API key</p>
 
 <a href="https://github.com/LKF0402/spectrolink/releases"><img src="https://img.shields.io/github/v/release/LKF0402/spectrolink?color=6B8FD4&label=release" alt="Release"></a>
 <a href="https://github.com/LKF0402/spectrolink/stargazers"><img src="https://img.shields.io/github/stars/LKF0402/spectrolink?color=yellow" alt="Stars"></a>
@@ -14,7 +14,8 @@ TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
 <img src="https://img.shields.io/badge/MCP-stdio-6B8FD4" alt="MCP">
 <img src="https://img.shields.io/badge/HITRAN-2024-4C8C4A" alt="HITRAN">
 <img src="https://img.shields.io/badge/techniques-7-9C6BD4" alt="Techniques">
-<img src="https://img.shields.io/badge/tools-43-6B8FD4" alt="Tools">
+<img src="https://img.shields.io/badge/tools-45-6B8FD4" alt="Tools">
+<img src="https://img.shields.io/badge/calibfree-TDLAS%20%2B%20LITES-4C8C4A" alt="Calib-free">
 <a href="https://github.com/LKF0402/spectrolink/commits/main"><img src="https://img.shields.io/github/last-commit/LKF0402/spectrolink" alt="Last commit"></a>
 <a href="https://github.com/LKF0402/spectrolink/issues"><img src="https://img.shields.io/github/issues/LKF0402/spectrolink" alt="Issues"></a>
 <img src="https://img.shields.io/badge/docs-TECHNICAL%20%C2%B7%20USAGE-blueviolet" alt="Docs">
@@ -50,6 +51,21 @@ TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
 
 > 💡 AI 无法执行本地命令时，才需要手动装 —— 见下方折叠块「⚙️ 手动安装与自检」。
 
+## 🧪 免标定（v1.1.0 · 仅 TDLAS / LITES）
+
+**不是"不标定"，是"用零基线 + 一个锚点 + 仪器状态，替掉整条浓度标定曲线"。**
+
+| 技术 | 模式 | 你至少要交什么 | 能得到什么 |
+|---|---|---|---|
+| **TDLAS** | `shape` | 2f 的 X/Y（建议加 0% 背景）、T/P/L、线中心 | 波形一致性、复增益/相位、自动搜出的 m/扫描跨度；浓度走 `absolute` / `anchored` |
+| | `absolute` | 同光路 0% 气 I0、L、T/P | `x=A_peak/(α_pure·L)` |
+| | `anchored` | 已知浓度参考 + 同 m/同轴 2f | `x=x_ref·(A/A_ref)` |
+| **LITES** | `anchored` | 参考浓度 2f、功率监测、f0/Q | `x=x_ref·(V/V_ref)·(P_ref/P)·(R_ref/R)` |
+
+- 新手三步：**A 零基线**（0% 气/暗，前后各一次）→ **B 锚点**（I0 或已知浓度参考）→ **C 仪器状态**（L/T/P、调制、锁相、采样率）。
+- 推荐路径：单路 2f 先做 `shape` 波形确认，再按手头数据走 `absolute`（有 I0）或 `anchored`（有已知浓度参考）。
+- LITES 采用单点锚定 + 功率/共振归一化，稳定、易落地；完整数据清单与 CSV 列名：[docs/CALIB_FREE.md](./docs/CALIB_FREE.md)。
+
 ## 📊 效果展示
 
 ![WMS demo](docs/assets/wms-ch4-demo.png)
@@ -58,7 +74,7 @@ TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
 
 ![交互工作流](docs/assets/interaction-workflow.png)
 
-> 四泳道流程：启动协议 → 参数与澄清（四级优先级 + 设备库 + 结构化追问）→ 仿真执行 → 校验与交付（10 项校验、α/条纹语境播报、未建模效应披露）
+> 四泳道流程：启动协议 → 参数与澄清（四级优先级 + 设备库 + 结构化追问）→ 仿真执行 → 校验与交付（10 项校验、α/条纹语境播报、保真度台账）
 
 <details>
 <summary>技术适配矩阵（扩展性）</summary>
@@ -73,11 +89,12 @@ TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
 
 - **全链路建模**：DAQ 调制 → 激光调谐 → HITRAN 吸收 → PD → ADC → 数字锁相；可选 etalon 条纹、RIN、1/f 漂移、RAM/AM
 - **七技术一体**：TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS，独立 server 按需加载、共用 `spectrolink_core` 物理内核
+- **免标定（1.1.0）**：TDLAS `shape/absolute/anchored` 与 LITES `anchored`；零基线 + 一个锚点 + 仪器状态，替掉浓度标定曲线；新手数据清单见 [docs/CALIB_FREE.md](./docs/CALIB_FREE.md)
 - **混合气多组分**：`mixture` 严格按 `α = Σ xᵢ·α_pureᵢ(T,P)` 逐点相加（**不用 x·P 当分压**），并返回各组分归因
 - **AI 交互契约**：六个技术的仪器/分析工具统一返回 `interaction` 与机器可读 `next_required_actions`；CRDS / NDIR / FTIR / DOAS 的动作只依据各自真实返回字段（浓度域、拟合质量、谱源降级、缺输入等），selftest 不参与记账
-- **保真度台账**：默认生效 11 项 / 需显式开启 6 项 / **未建模 7 项**，未建模项随结果披露
+- **保真度台账**：默认生效 11 项 / 需显式开启 6 项，结果随附台账；已建模项与适用范围一目了然
 - **可信度分层**：10 项物理校验与交互合规**分别**计分
-- **可复现 + 离线门禁**：`seed=0` 逐位可复现；契约自检 191 项与保真度审计均为 CI 硬门禁（不依赖网络）
+- **可复现 + 离线门禁**：`seed=0` 逐位可复现；契约自检 193 项与保真度审计均为 CI 硬门禁（不依赖网络）
 
 其他：`return_xy` 透出锁相 X/Y 用于 RAM/AM 诊断；`tdlas_invert(n_repeats>0)` 给测量不确定度（仅统计分量）；`x_list` 多浓度同图。细节见 [TECHNICAL.md](./TECHNICAL.md) 与 [docs/VALIDATION.md](./docs/VALIDATION.md)。
 
@@ -112,7 +129,7 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 </details>
 
 <details>
-<summary><b>🔧 工具列表（7 技术 / 6 server / 43 个工具）</b></summary>
+<summary><b>🔧 工具列表（7 技术 / 6 server / 45 个工具）</b></summary>
 
 | 工具 | 功能 |
 |---|---|
@@ -122,7 +139,8 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 | tdlas_simulate | 解析模型正向计算：DAS 透过率、1f、2f 峰高 |
 | tdlas_das_chain | 三角波 DAS 链路：PD 原始信号 → 基线拟合 → 吸光度 |
 | tdlas_review | 结果自动校验（10 项，不绘图）+ 交互契约与保真度声明 |
-| tdlas_invert | 免标定浓度反演（2f/1f → 摩尔分数）；`n_repeats>0` 给出不确定度 |
+| tdlas_invert | 2f/1f 归一化浓度反演（需灵敏度 k 或已知浓度参考，非免标定） |
+| ⭐ **tdlas_calibfree** | **免标定**：`shape` / `absolute`（需 I0）/ `anchored`（单点参考）；先 `mode=guide` |
 | tdlas_detection_limit | 噪声等效浓度（NEC）与检测限（LOD） |
 | tdlas_detection_limit_scan | LOD 随光程 / 参考浓度的二维扫描（选型） |
 | tdlas_session | 跨会话工况参数持久化 |
@@ -149,6 +167,7 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 | lites_resonance / lites_sweep | 共振跟踪 / 参数扫描 |
 | lites_waveform | 合成 2f 波形 + 6 子图（吸收线型 / 机械传递 / 热扩散 / 2f / 扣基线 / 噪声预算） |
 | lites_invert | 实测 2f 幅值 → 摩尔分数（含反推自洽性校验） |
+| ⭐ **lites_calibfree** | **免标定**：单点已知浓度 + 功率/共振归一化；`mode=guide` 给数据清单 |
 | lites_review | 实验方案评审：LITES 7 类失效模式逐条检查 |
 | lites_compare | 多器件统一口径对比（同线强/浓度/噪声） |
 | lites_noise_budget | 噪声预算拆分：1/f / 白噪声 / TIA 各自占比 |
@@ -226,6 +245,7 @@ python server-tdlas/tools/tdlas_mcp.py --selftest   # 本地跑一遍自检
 |---|---|
 | [TECHNICAL.md](./TECHNICAL.md) | 物理原理、算法实现、参数表、已知近似（含 §8 多技术 server 章节） |
 | [docs/VALIDATION.md](./docs/VALIDATION.md) | 可信度分层、校验判据口径、已知局限 |
+| [docs/CALIB_FREE.md](./docs/CALIB_FREE.md) | 免标定新手引导：三类数据、TDLAS/LITES 模式、CSV 列名、检查表 |
 | [docs/ADAPTATION_MATRIX.md](./docs/ADAPTATION_MATRIX.md) | 多技术适配矩阵与接入流程 |
 | [SKILL.md](./SKILL.md) | AI 交互规范与工具使用协议 |
 | [spectrolink_core/README.md](./spectrolink_core/README.md) | 共用物理内核说明 |

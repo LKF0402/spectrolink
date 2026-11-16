@@ -1,0 +1,56 @@
+{
+  "dataset_id": "example_dataset",
+  "technique": "TDLAS-WMS",
+  "role": "sample",
+  "species": ["CO2"],
+  "balance_gas": "N2",
+  "nominal_concentration": null,
+  "T_K": null,
+  "P_atm": null,
+  "L_cm": null,
+  "path_type": null,
+  "light_source": {
+    "type": null,
+    "center_cm-1": null,
+    "center_nm": null,
+    "power_mW": null,
+    "linewidth_MHz": null
+  },
+  "modulation": {
+    "f_Hz": null,
+    "amp_V": null,
+    "waveform": null,
+    "m": null
+  },
+  "scan": {
+    "f_Hz": null,
+    "span_nm": null,
+    "waveform": null
+  },
+  "detection": {
+    "type": null,
+    "bandwidth_Hz": null,
+    "gain": null
+  },
+  "lockin": {
+    "f_Hz": null,
+    "order": 2,
+    "time_constant_ms": null,
+    "phase_deg": null
+  },
+  "acquisition": {
+    "fs_Hz": null,
+    "n_avg": null,
+    "duration_s": null,
+    "trigger": null
+  },
+  "reference_channel": null,
+  "dark": null,
+  "files": {
+    "sample": "raw/sample.csv",
+    "background": "raw/background.csv",
+    "dark": "raw/dark.csv",
+    "lockin": "processed/lockin.csv"
+  },
+  "notes": "未知字段填 null；按证书与实验记录填写。"
+}

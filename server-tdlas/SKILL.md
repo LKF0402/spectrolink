@@ -18,6 +18,7 @@ description: SpectroLink 子服务器 server-tdlas（L2 参考，AI 自动读取
 | 快速算峰高（解析模型，不出图） | `tdlas_simulate` |
 | 校验 | `tdlas_review` |
 | 浓度反演 | `tdlas_invert` |
+| **免标定**（2f 形状 / DAS 绝对 / 单点锚定） | `tdlas_calibfree`（先 `mode=guide`） |
 | 检测限 | `tdlas_detection_limit` / `tdlas_detection_limit_scan` |
 | 设备/整机库 | `tdlas_device` |
 | 工况记忆 | `tdlas_session` |
@@ -26,6 +27,14 @@ description: SpectroLink 子服务器 server-tdlas（L2 参考，AI 自动读取
 | Allan 方差 | `tdlas_allan` |
 | 校准曲线 | `tdlas_calibration_curve` |
 | 导出数据（CSV/JSON） | `tdlas_export` |
+
+## 免标定使用规范（`tdlas_calibfree`）
+
+- `shape` 只用单路 2f：输出 m、扫描轴、复增益/相位与 corr，`x=null`；浓度走 `absolute` / `anchored`。
+- `absolute` 给 I0（同光路 0% 气透射）；`x=A_peak/(α_pure·L)`。
+- `anchored` 给同 m/同轴/同增益的已知浓度参考；`x=x_ref·(A/A_ref)`。
+- `absolute` 在标气证书浓度范围内最稳；更高浓度可走 1.2 的自加宽模型。
+- 数据可传数组，或 `data_path` 指向 CSV/NPZ（列名 `x2f,y2f,x2f_bg,y2f_bg` 或 `i,i0`）。
 
 ## A. 交互契约（硬约束）
 

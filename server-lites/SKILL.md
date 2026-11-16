@@ -7,7 +7,7 @@ description: SpectroLink 子服务器 server-lites（L2 参考，AI 自动读取
 
 > 由总 SKILL 自动调度读取。物理内核复用 spectrolink_core；独立加载、按需启用。**器件库仅内置演示默认（qtf-commercial-decapped），真实音叉参数一律交互获取。**
 
-**版本 v1.0.0**
+**版本 v1.1.0**
 
 通过 MCP 协议接入 AI 助手，以自然语言完成 LITES 实验仿真。对全链路逐级建模：激光功率（含调制）→ 器件吸收 + 气体吸收 → 热沉积 → 热波传递（|H_th|∝1/√f 缓变，f_ref=f0/2）→ 热弹应变 → 机械共振 → 压电电荷 → TIA → 锁相 2f → 浓度反演。
 
@@ -75,6 +75,7 @@ description: SpectroLink 子服务器 server-lites（L2 参考，AI 自动读取
 | **找最优参数** | `lites_sweep` | 扫 f_m / mod_depth_cm1 / power_mW，必须**实测扫描**而非套公式 |
 | **出图** | `lites_waveform` | 仪器级波形图，`save_png=True` 时落盘 |
 | **从信号反推浓度** | `lites_invert` | 2f 电压 → 摩尔分数，`use_delta=True` 扣本底 |
+| **免标定**（单点锚定 + 功率/共振归一化） | `lites_calibfree` | 先 `mode=guide`；`anchored` 需参考浓度 + 功率监测 + f0/Q |
 | **检测限** | `lites_mdl` | n·σ 判据 + 文献量级比对 |
 | **噪声来源分解** | `lites_noise_budget` | 逐项贡献，判断瓶颈在哪 |
 | **器件对比/选型** | `lites_compare` | `V_delta` / `SNR` / `MDL` 多维 |
@@ -83,6 +84,13 @@ description: SpectroLink 子服务器 server-lites（L2 参考，AI 自动读取
 | **结果校验** | `lites_review` | 多维度检查，不绘图 |
 | **协议/台账** | `lites_guide` | SOP、术语表、保真度台账 |
 | **自检** | `lites_selftest` | 全链路验证 |
+
+## 免标定硬边界（`lites_calibfree`）
+
+- 推荐 `anchored`：`x=x_ref·(V/V_ref)·(P_ref/P)·(R_ref/R)`；同器件、同波长、同调制/锁相条件下成立。
+- LITES 推荐单点锚定：`η_dev` 与器件私有增益 `g`（含 C_total/R_tia/电极面积）被 `x_ref` 吸收，同器件、同波长可跨浓度直接出结果。
+- 给功率与 f_m 监测，可同时消除功率漂移与共振漂移；未给时按电压比值输出。
+- 单点参考必须是**同一次装配、同一光路**下测的，换器件/换波长要重新锚定。
 
 ## AI 操作规范（必须遵守）
 

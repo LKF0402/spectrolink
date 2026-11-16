@@ -35,7 +35,7 @@ import tdlas_sim as ts  # noqa: E402
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_INFO = {"protocolVersion": PROTOCOL_VERSION,
                "capabilities": {"tools": {}},
-               "serverInfo": {"name": "tdlas", "version": "1.0.0"}}
+               "serverInfo": {"name": "tdlas", "version": "1.1.0"}}
 OUT_DIR = _ROOT / "tmp" / "mcp_out"
 
 # 远端直链隐私：MCP 返回值（尤其 tools/call 的 log 字段）会被序列化发给远端客户端，
@@ -87,6 +87,7 @@ from tdlas_constants import (          # noqa: E402 纯数据常量表（部分�
 )
 
 from spectrolink_core import report_blocks as _report_blocks         # noqa: E402
+from spectrolink_core import calibfree as _cf                        # noqa: E402
 from spectrolink_core.interaction import (                      # noqa: E402
     ev_ok as _ev_ok, interaction_block as _interaction_block_core)
 from spectrolink_core.mcp_runtime import (                      # noqa: E402
@@ -2529,6 +2530,10 @@ def t_guide(topic=None):
     out["param_guide"] = {k: {"cn": v[0], "unit": v[1], "why": v[2]}
                           for k, v in PARAM_ACQ_GUIDE.items()}
     out["fidelity"] = _fidelity_summary()
+    out["calibfree"] = {"tool": "tdlas_calibfree", "mode": "guide",
+                        "title": _cf.GUIDE["title"],
+                        "one_sentence": _cf.GUIDE["one_sentence"],
+                        "route": "shape（仅形状）→ absolute（有 I0）或 anchored（有已知浓度）"}
     if topic:
         t = str(topic).upper()
         out["glossary_hit"] = {k: v for k, v in AI_INTERACTION_GUIDE["glossary"].items()
@@ -2657,10 +2662,109 @@ def t_allan(signal, fs, max_tau=None, tau_points=100, save_png=False):
 
 
 def t_selftest():
-    """全链路自检（有线 / 2f 形状 / 弱场线性 / 反演闭环 / 检测限 / 时域交叉验证 / DAS 链路）。"""
+    """全链路自检（有线 / 2f 形状 / 弱场线性 / 反演闭环 / 检测限 / 时域交叉验证 / DAS 链路 / 免标定）。"""
     with _quiet() as g:
         ts.selftest()
-    return {"ok": True, "log": _sanitize_paths(g.getvalue()).splitlines()}
+        print("== calibfree 自检 ==")
+        for line in _cf.selftest():
+            print(line)
+    txt = g.getvalue()
+    return {"ok": "[FAIL]" not in txt and "自测通过" in txt,
+            "log": _sanitize_paths(txt).splitlines()}
+
+
+def _cf_pick(ds, role, explicit):
+    """显式数组优先；否则从 data_path 的表里取；都没有就返回 None。"""
+    if explicit is not None:
+        return explicit
+    if ds and ds.get(role) is not None:
+        return ds[role].tolist()
+    return None
+
+
+def t_calibfree(mode="guide", species="CO2", wn_center_cm1=None,
+                T=296.0, P=1.01325, L_cm=30.0,
+                data_path=None, background_path=None,
+                x2f=None, y2f=None, x2f_bg=None, y2f_bg=None,
+                i=None, i0=None,
+                sample_peak=None, ref_peak=None, x_ref=None,
+                scan_span_cm1=None, line_center_index=None,
+                baseline_windows=None, session_id="default"):
+    """免标定入口：guide / shape / absolute / anchored。
+
+    - guide    返回数据清单（三类数据 + 步骤 + 实操建议）
+    - shape    输出 m/扫描轴/复增益与 corr；浓度由 absolute / anchored 给出
+    - absolute DAS：I/I0 → A → x=A/(αL)，给 I0
+    - anchored 已知浓度参考的峰高比：x=x_ref·(A/A_ref)
+
+    data_path 支持 CSV/NPZ；CSV 列名可用 x2f/y2f/x2f_bg/y2f_bg/i/i0（大小写不敏感）。
+    只有 data_path 时，背景列可同表，也可用 background_path 单独给。
+    """
+    if mode == "guide":
+        return {"mode": "guide", "ok": True, "guide": _cf.GUIDE,
+                "try_this": "mode=shape + data_path=你的2f.csv（列 x2f,y2f,x2f_bg,y2f_bg）",
+                "note": "配齐三类数据即可开跑；有 I0 或已知浓度参考时，直接出浓度。"}
+
+    if mode not in ("shape", "absolute", "anchored"):
+        raise ValueError(f"mode 必须是 guide/shape/absolute/anchored，收到 {mode!r}")
+    if not (species and str(species).strip()):
+        raise ValueError("species 不能为空")
+    if mode in ("shape", "absolute") and wn_center_cm1 is None:
+        raise ValueError(f"mode={mode} 需要 wn_center_cm1（选线中心波数 cm⁻¹）")
+    if float(L_cm) <= 0:
+        raise ValueError("L_cm 必须 >0")
+
+    ds = None
+    if data_path:
+        if not Path(str(data_path)).exists():
+            raise ValueError(f"data_path 不存在：{data_path}")
+        ds = _cf.dataset_from_path(str(data_path), str(background_path) if background_path else None)
+
+    if mode == "shape":
+        xa = _cf_pick(ds, "x2f", x2f)
+        ya = _cf_pick(ds, "y2f", y2f)
+        xb = _cf_pick(ds, "x2f_bg", x2f_bg)
+        yb = _cf_pick(ds, "y2f_bg", y2f_bg)
+        if xa is None or ya is None:
+            raise ValueError("shape 需要 x2f/y2f：直接传数组，或 data_path 表里含这两列。"
+                             "没有 2f 数据时先跑 mode=guide 看最小清单。")
+        with _quiet():
+            out = _cf.tdlas_shape(xa, ya, xb, yb, species=str(species).upper(),
+                                  wn_center_cm1=float(wn_center_cm1), T=float(T),
+                                  P=float(P), L_cm=float(L_cm),
+                                  scan_span_cm1=scan_span_cm1,
+                                  line_center_index=line_center_index)
+        out["next_step"] = ("形状 corr≥0.99 后：有 I0 走 mode=absolute；"
+                            "有已知浓度参考走 mode=anchored。单路 2f 永远不报 x。")
+
+    elif mode == "absolute":
+        ia = _cf_pick(ds, "i", i)
+        i0a = _cf_pick(ds, "i0", i0)
+        if ia is None or i0a is None:
+            raise ValueError("absolute 需要 I 与 I0：直接传 i/i0，或 data_path/background_path "
+                             "表里含 i/i0 列。I0 必须是同光路 0% 气透射。")
+        with _quiet():
+            out = _cf.tdlas_das(ia, i0a, species=str(species).upper(),
+                                wn_center_cm1=float(wn_center_cm1), T=float(T),
+                                P=float(P), L_cm=float(L_cm),
+                                baseline_windows=baseline_windows)
+        out["next_step"] = ("x 在 (0,1] 且 validation 通过即可报数；"
+                            "标气证书浓度范围内最稳，更高浓度可用 1.2 的高浓度模型。")
+
+    else:  # anchored
+        if sample_peak is None or ref_peak is None or x_ref is None:
+            raise ValueError("anchored 需要 sample_peak / ref_peak / x_ref 三个数；"
+                             "峰高必须同 m、同扫描轴、同增益下取。")
+        out = _cf.anchored_ratio(sample_peak, ref_peak, x_ref, label="2f peak")
+        out["species"] = str(species).upper()
+        out["technique"] = "TDLAS"
+        out["next_step"] = ("同一 m、扫描轴、增益下，跨浓度直接出结果；"
+                            "换条件时重取一次参考即可。")
+
+    out["guide"] = {"title": _cf.GUIDE["title"], "one_sentence": _cf.GUIDE["one_sentence"]}
+    out["interaction"], out["next_required_actions"] = _interaction_block(
+        out, "calibfree", session_id)
+    return out
 
 
 DISPATCH = {"tdlas_simulate": t_simulate,
@@ -2678,6 +2782,7 @@ DISPATCH = {"tdlas_simulate": t_simulate,
             "tdlas_export": t_export,
             "tdlas_allan": t_allan,
             "tdlas_baseline_simulate": t_baseline_simulate,
+            "tdlas_calibfree": t_calibfree,
             "tdlas_selftest": t_selftest}
 
 # 混合气多组分声明。四个仿真工具共用同一份定义，避免各写一遍后漂移
@@ -3187,6 +3292,46 @@ TOOLS = [
          "save_png": {"type": "boolean",
                       "description": "是否出 4 子图（原始信号 / 1f / 2f / 2f·1f）"}},
       "required": ["species", "wn_center"]}},
+    {"name": "tdlas_calibfree",
+     "description": "免标定入口（TDLAS）：guide 给新手数据清单；shape 只用 2f 定 m/扫描轴/复增益"
+                    "（x 恒为 null，单路 2f 不能定浓度）；absolute 用 I/I0 做 DAS 绝对反演；"
+                    "anchored 用已知浓度参考的峰高比跨浓度。数据可传数组或 CSV/NPZ 路径。",
+     "inputSchema": {"type": "object", "properties": {
+         "mode": {"type": "string", "enum": ["guide", "shape", "absolute", "anchored"],
+                  "description": "guide / shape / absolute / anchored；默认 guide"},
+         "species": {"type": "string", "description": "分子式，默认 CO2"},
+         "wn_center_cm1": {"type": "number", "description": "选线中心波数 cm⁻¹；shape/absolute 必填"},
+         "T": {"type": "number", "description": "温度 K，默认 296"},
+         "P": {"type": "number", "description": "总压 atm，默认 1.01325"},
+         "L_cm": {"type": "number", "description": "光程 cm，按本次实验填写（默认 30）"},
+         "data_path": {"type": "string",
+                       "description": "CSV/NPZ 路径；CSV 列名 x2f,y2f,x2f_bg,y2f_bg 或 i,i0"},
+         "background_path": {"type": "string",
+                             "description": "背景单独文件时的路径（列名同上）"},
+         "x2f": {"type": "array", "items": {"type": "number"},
+                 "description": "2f 同相分量（V）；给了 data_path 可省略"},
+         "y2f": {"type": "array", "items": {"type": "number"},
+                 "description": "2f 正交分量（V）"},
+         "x2f_bg": {"type": "array", "items": {"type": "number"},
+                    "description": "0% 气 2f 同相分量；强烈建议给"},
+         "y2f_bg": {"type": "array", "items": {"type": "number"},
+                    "description": "0% 气 2f 正交分量"},
+         "i": {"type": "array", "items": {"type": "number"},
+               "description": "DAS 样品透射（V）"},
+         "i0": {"type": "array", "items": {"type": "number"},
+                "description": "DAS 0% 气透射（V）；absolute 必填"},
+         "sample_peak": {"type": "number", "description": "anchored：样品峰高"},
+         "ref_peak": {"type": "number", "description": "anchored：已知浓度参考峰高"},
+         "x_ref": {"type": "number", "description": "anchored：参考摩尔分数"},
+         "scan_span_cm1": {"type": "number",
+                           "description": "扫描全宽 cm⁻¹；不给则自动搜索 0.15–2.4"},
+         "line_center_index": {"type": "integer",
+                               "description": "选线中心对应的采样点；不给则按 2f 包络对称轴估计"},
+         "baseline_windows": {"type": "array",
+                              "description": "DAS 两侧非吸收窗 [[起,止],[起,止]]（采样点索引）",
+                              "items": {"type": "array", "items": {"type": "integer"}}},
+         "session_id": {"type": "string", "description": "会话标识，默认 default"}
+      }, "required": []}},
     {"name": "tdlas_selftest",
      "description": "全链路自检。",
      "inputSchema": {"type": "object", "properties": {}}},

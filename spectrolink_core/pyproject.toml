@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spectrolink-core"
-version = "1.0.0"
-description = "SpectroLink 共用物理内核：HITRAN 线表/吸收谱、Voigt、锁相谐波、噪声统计"
+version = "1.1.0"
+description = "SpectroLink 共用物理内核：HITRAN 线表/吸收谱、Voigt、锁相谐波、噪声统计、免标定反演"
 requires-python = ">=3.10"
 dependencies = ["numpy", "scipy", "matplotlib", "hitran-api"]
 

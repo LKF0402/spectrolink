@@ -49,11 +49,12 @@ for _p in (_ROOT, _SRV):
 
 import lites_physics as lph  # noqa: E402
 from tools import lites_tools as ltool  # noqa: E402
+from spectrolink_core import calibfree as _cf  # noqa: E402
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_INFO = {"protocolVersion": PROTOCOL_VERSION,
                "capabilities": {"tools": {}},
-               "serverInfo": {"name": "lites", "version": "1.0.0"}}
+               "serverInfo": {"name": "lites", "version": "1.1.0"}}
 # 返回值（尤其 tools/call 的 log 字段）可能含本地绝对路径（如 HITRAN 缓存目录、
 # PNG 输出目录）。在返回边界统一脱敏：递归把用户目录/工作区绝对路径替换成中性标记。
 # 注意：不硬编码任何真实路径字符串（符合 push 前安全扫描规则），改用 Path.home() 动态获取。
@@ -267,6 +268,7 @@ def _ensure_contract(out, tool_name):
 _INTERACTION_TOOLS = {
     "lites_forward", "lites_sweep", "lites_waveform", "lites_invert",
     "lites_mdl", "lites_noise_budget", "lites_resonance", "lites_compare", "lites_review",
+    "lites_calibfree",
 }
 
 
@@ -299,6 +301,7 @@ t_device = _wrap(ltool.lites_device, "lites_device")
 t_resonance = _wrap(ltool.lites_resonance, "lites_resonance")
 t_compare = _wrap(ltool.lites_compare, "lites_compare")
 t_review = _wrap(ltool.lites_review, "lites_review")
+t_calibfree = _wrap(ltool.lites_calibfree, "lites_calibfree")
 t_guide = _wrap(ltool.lites_guide, "lites_guide")
 
 
@@ -332,6 +335,15 @@ def t_selftest():
         ok = False
         log.append(f"[FAIL] lites_tools.lites_selftest 抛异常：{type(e).__name__}: {e}")
 
+    try:
+        cf_lines = list(_cf.selftest())
+        log += ["=== calibfree.selftest ==="] + cf_lines
+        if any(x.startswith("[FAIL]") for x in cf_lines):
+            ok = False
+    except Exception as e:
+        ok = False
+        log.append(f"[FAIL] calibfree.selftest 抛异常：{type(e).__name__}: {e}")
+
     return {"ok": ok, "log": _sanitize_paths(log)}
 
 
@@ -346,6 +358,7 @@ DISPATCH = {
     "lites_resonance": t_resonance,
     "lites_compare": t_compare,
     "lites_review": t_review,
+    "lites_calibfree": t_calibfree,
     "lites_guide": t_guide,
     "lites_selftest": t_selftest,
 }
@@ -842,6 +855,68 @@ TOOLS = [{
             "sigma_V": {
                 "type": "number",
                 "description": "电压噪声 V",
+            },
+        },
+        "required": [],
+    },
+}, {
+    "name": "lites_calibfree",
+    "description": "【LITES 免标定】guide 返回最小数据清单；anchored 用单点已知浓度 + 功率监测 + 共振参数做跨浓度免标定曲线：x=x_ref·(V/V_ref)·(P_ref/P)·(R_ref/R)。同器件同波长跨浓度，换器件/波长重锚一次。",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "mode": {
+                "type": "string",
+                "enum": ["guide", "anchored"],
+                "description": "guide / anchored；默认 guide",
+            },
+            "data_path": {
+                "type": "string",
+                "description": "CSV/NPZ 路径；列名 v2f,v2f_ref,power_mW,f_m_Hz",
+            },
+            "v2f_sample": {
+                "type": "number",
+                "description": "样品 2f 电压 V（波形请先取峰值）",
+            },
+            "v2f_ref": {
+                "type": "number",
+                "description": "已知浓度参考的 2f 电压 V",
+            },
+            "x_ref": {
+                "type": "number",
+                "description": "参考摩尔分数",
+            },
+            "power_sample_mW": {
+                "type": "number",
+                "description": "样品测量时的入射光功率 mW",
+            },
+            "power_ref_mW": {
+                "type": "number",
+                "description": "参考测量时的入射光功率 mW",
+            },
+            "f_m_sample_Hz": {
+                "type": "number",
+                "description": "样品测量的调制频率 Hz",
+            },
+            "f_m_ref_Hz": {
+                "type": "number",
+                "description": "参考测量的调制频率 Hz",
+            },
+            "f0_Hz": {
+                "type": "number",
+                "description": "音叉共振频率 Hz；与 Q 一起给才做共振归一化",
+            },
+            "Q": {
+                "type": "number",
+                "description": "音叉品质因数；与 f0_Hz 一起给",
+            },
+            "v2f_baseline_sample": {
+                "type": "number",
+                "description": "样品 0% 气基线 V（可选）",
+            },
+            "v2f_baseline_ref": {
+                "type": "number",
+                "description": "参考 0% 气基线 V（可选）",
             },
         },
         "required": [],

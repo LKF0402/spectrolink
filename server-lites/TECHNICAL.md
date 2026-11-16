@@ -28,7 +28,7 @@ tools/lites_hitran.py     HITRAN 取数层（HAPI 1.x 封装，自包含、免 k
         ↓
 lites_physics.py          物理内核（材料/器件模型、传递链、噪声、标定反解）
         ↓
-tools/lites_tools.py      仪器口径层（12 个工具、中文绘图、契约块组装）
+tools/lites_tools.py      仪器口径层（13 个工具、中文绘图、契约块组装）
         ↓
 tools/lites_mcp.py        MCP 服务器（JSON-RPC stdio/HTTP、契约注入、schema 校验）
         ↓

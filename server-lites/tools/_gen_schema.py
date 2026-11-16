@@ -193,6 +193,26 @@ TOOLS = [
           "mod_depth_cm1": {**X, "description": "调制深度 cm⁻¹"},
           "sigma_V": {**X, "description": "电压噪声 V"}}),
 
+    tool("lites_calibfree",
+         "【LITES 免标定】guide 返回最小数据清单；anchored 用单点已知浓度 + 功率监测 + "
+         "共振参数做跨浓度免标定曲线：x=x_ref·(V/V_ref)·(P_ref/P)·(R_ref/R)。"
+         "同器件同波长跨浓度，换器件/波长重锚一次。",
+         {"mode": {"type": "string", "enum": ["guide", "anchored"],
+                   "description": "guide / anchored；默认 guide"},
+          "data_path": {"type": "string",
+                        "description": "CSV/NPZ 路径；列名 v2f,v2f_ref,power_mW,f_m_Hz"},
+          "v2f_sample": {**X, "description": "样品 2f 电压 V（波形请先取峰值）"},
+          "v2f_ref": {**X, "description": "已知浓度参考的 2f 电压 V"},
+          "x_ref": {**X, "description": "参考摩尔分数"},
+          "power_sample_mW": {**X, "description": "样品测量时的入射光功率 mW"},
+          "power_ref_mW": {**X, "description": "参考测量时的入射光功率 mW"},
+          "f_m_sample_Hz": {**X, "description": "样品测量的调制频率 Hz"},
+          "f_m_ref_Hz": {**X, "description": "参考测量的调制频率 Hz"},
+          "f0_Hz": {**X, "description": "音叉共振频率 Hz；与 Q 一起给才做共振归一化"},
+          "Q": {**X, "description": "音叉品质因数；与 f0_Hz 一起给"},
+          "v2f_baseline_sample": {**X, "description": "样品 0% 气基线 V（可选）"},
+          "v2f_baseline_ref": {**X, "description": "参考 0% 气基线 V（可选）"}}),
+
     tool("lites_guide",
          "【使用指南】返回 LITES 的交互协议：参数索取优先级、术语表、参数物理含义、"
          "以及新手最常踩的坑。topic 传入关键词可做术语检索。"
