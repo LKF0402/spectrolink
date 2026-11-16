@@ -15,7 +15,7 @@ description: SpectroLink 子服务器 server-tdlas（L2 参考，AI 自动读取
 | **实测基线仿真**（0 ppm 氮气背景当真实 I0，叠加理论吸收） | `tdlas_baseline_simulate` |
 | DAS 五子图 | `tdlas_das_instrument` |
 | DAS 链路处理 | `tdlas_das_chain` |
-| 快速算峰高（解析模型，不出图） | `tdlas_simulate` |
+| 快速计算峰高（解析模型，不绘图） | `tdlas_simulate` |
 | 校验 | `tdlas_review` |
 | 浓度反演 | `tdlas_invert` |
 | **免标定**（2f 形状 / DAS 绝对 / 单点锚定） | `tdlas_calibfree`（先 `mode=guide`） |
@@ -51,14 +51,14 @@ description: SpectroLink 子服务器 server-tdlas（L2 参考，AI 自动读取
 
 优先级：① 用户实测 → ② 器件型号（联网查 datasheet）→ ③ 标定 → ④ 默认值+标注。
 
-`clarify.needed=true` → **必须先问，得到回答前不得出图**。
-用户说"用默认值"可跳过。
+`clarify.needed=true` → **必须先询问，得到回答前不得绘图**。
+用户指定“使用默认值”时可跳过。
 
-**参数名以工具 schema 为准**：不同工具参数名不同（如 `tdlas_simulate` 用 `wn0`/`L`，`tdlas_wms_instrument` 用 `wn_center`/`scan_span_cm`/`L_cm`）。本 server 对未声明参数**严格拒绝**（防拼写错），调用前先查工具 schema，禁止凭旧工具习惯传参。
+**参数名以工具 schema 为准**：不同工具参数名不同（如 `tdlas_simulate` 用 `wn0`/`L`，`tdlas_wms_instrument` 用 `wn_center`/`scan_span_cm`/`L_cm`）。本 server 对未声明参数**严格拒绝**（防止拼写错误），调用前先查工具 schema，禁止依据旧工具习惯传参。
 
-## C. 出图规范（硬约束）
+## C. 绘图规范（硬约束）
 
-**用户说"画图"必须传 `save_png=true`**，否则用户拿不到图。
+**用户要求绘图时必须传 `save_png=true`**，否则无法交付图像。
 
 **图型选择**：
 
@@ -73,18 +73,18 @@ description: SpectroLink 子服务器 server-tdlas（L2 参考，AI 自动读取
 **六子图顺序**（WMS 专用）：
 ① V(t) 驱动电压 → ② DAS 原始 PD → ③ DAS 吸光度 vs 理论 → ④ 1f → ⑤ 2f → ⑥ 2f/1f 归一化
 
-**出图硬约束**：
+**绘图硬约束**：
 1. 面板序号完整（①~⑥）
 2. DAS 单浓度画原始 PD（斜的 L-I 曲线，不扣基线）；多浓度画归一化 T/T0
 3. 纵轴只按**有效区**数据定（剔除区不参与）
 4. 剔除区只对 WMS 面板有效，DAS 不画剔除区
 5. 横轴用**扫描波数**（非瞬时波数）
 6. 1f 与 2f 不同格
-7. **AI 出图后必须自查**（Read 图检查坐标轴/峰值/字体），修好再交付
+7. **AI 绘图后必须自查**（Read 图检查坐标轴/峰值/字体），修好再交付
 
 ## C+. 中红外激光器预设（PRESET_LASERS）
 
-`tdlas_sim.py` 内置 demo 激光器预设，快速跑通中红外波段仿真：
+`tdlas_sim.py` 内置 demo 激光器预设，快速正常运行中红外波段仿真：
 
 | 预设名 | 波段 | 目标气体 | 说明 |
 |---|---|---|---|
@@ -132,7 +132,7 @@ description: SpectroLink 子服务器 server-tdlas（L2 参考，AI 自动读取
 ✅ `nanoplus_3373nm_SN5712`, `NI_USB-6211`, `多通池_10m`
 ❌ `a`, `test`, `dev1`, `临时`
 
-## E. 物理坑点（必查）
+## E. 物理约束与注意事项（必查）
 
 1. **横轴用扫描波数**（非瞬时波数）
 2. **2f/1f 失效判据**：非吸收区泄漏 > 峰值 30%（1f 过零不是失效）

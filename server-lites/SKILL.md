@@ -71,9 +71,9 @@ description: SpectroLink 子服务器 server-lites（L2 参考，AI 自动读取
 
 | 场景 | 必选工具 | 说明 |
 |------|----------|------|
-| **给定量信号** | `lites_forward` | 正向首选，返回 2f 电压 + SBR + 各环节传递量 |
+| **输出定量信号** | `lites_forward` | 正向首选，返回 2f 电压 + SBR + 各环节传递量 |
 | **找最优参数** | `lites_sweep` | 扫 f_m / mod_depth_cm1 / power_mW，必须**实测扫描**而非套公式 |
-| **出图** | `lites_waveform` | 仪器级波形图，`save_png=True` 时落盘 |
+| **绘图** | `lites_waveform` | 仪器级波形图，`save_png=True` 时落盘 |
 | **从信号反推浓度** | `lites_invert` | 2f 电压 → 摩尔分数，`use_delta=True` 扣本底 |
 | **免标定**（单点锚定 + 功率/共振归一化） | `lites_calibfree` | 先 `mode=guide`；`anchored` 需参考浓度 + 功率监测 + f0/Q |
 | **检测限** | `lites_mdl` | n·σ 判据 + 文献量级比对 |
@@ -111,9 +111,9 @@ description: SpectroLink 子服务器 server-lites（L2 参考，AI 自动读取
 
 **执行方式**：
 
-- `next_required_actions` —— **逐条照做**。`severity` 三级：`block_conclusion`（未满足不得给定量结论）、`must_disclose`（结论可给但必须在同一回答说明）、`advisory`（建议）。
+- `next_required_actions` —— **逐条执行**。`severity` 三级：`block_conclusion`（未满足不得给出定量结论）、`must_disclose`（结论可给但必须在同一回答说明）、`advisory`（建议）。
 - `disclosure_pending` —— **必须覆盖**。里面的每一条都要在同一回答里出现，缺一条就是把结果当成比它更可信的东西报出去了。
-- `assumptions` —— 说明哪些参数用了默认值；给定量结论时要标注。
+- `assumptions` —— 说明哪些参数用了默认值；给出定量结论时要标注。
 - `interaction` —— `conclusion_allowed` / `blocking_reason` / `stage`（`clarify` / `produced` / `verified`）；不得把 `conclusion_allowed=true` 当成物理正确性的证明。
 
 > ⚠️ **边界声明**：动作清单只覆盖**已建模**的判据（`validation` 的 fail/warn、`x` 是否落在 `(0,1]`、`αL` 是否进入非线性区（`linearity_check.alphaL` / `conditions.alphaL` / `metrics.alphaL`，阈值 0.05）、`findings` 的 warn、`assumptions` 的默认值、`sweep` 的 `power_law_index` 是否偏离 1）。α 语境与 etalon 条纹的专门播报**未实现**（LITES 无 etalon 模型；α 相关前提按 `assumptions` 披露）。
@@ -122,7 +122,7 @@ description: SpectroLink 子服务器 server-lites（L2 参考，AI 自动读取
 **两条经实测标定的口径**：
 
 1. **缺参数不阻断结论**。默认工况下 `assumptions` 有几十项（含全部器件参数）。若把"未确认"当阻断，就没有任何一个结果可用了。缺参数走 `disclosure_pending`（披露），阻断只留给"这个数本身不可用"。
-2. **不隐藏数据**。结论受限时**不**把定量字段置 `null`——首次调用（必然有默认参数）就拿不到任何数，用户也无法自行复核。改为**数据保留、结论受控**。
+2. **不隐藏数据**。结论受限时**不**把定量字段置 `null`——首次调用（必然有默认参数）就无法获得任何数值，用户也无法自行复核。改为**数据保留、结论受控**。
 
 ### 2. 启动协议
 
@@ -131,7 +131,7 @@ description: SpectroLink 子服务器 server-lites（L2 参考，AI 自动读取
 ### 3. 参数澄清（硬约束）
 
 需要澄清时（`clarify.needed=True`）：
-- **必须先提问**，获得回答前不得出图或下结论
+- **必须先提问**，获得回答前不得绘图或下结论
 - 用户明确说"用默认值"时方可跳过
 - 提问用结构化选择框，每题 2–4 个固定选项
 - 超过 4 题按优先级分批：**器件型号/η_dev → 吸收线/波长 → 调制频率 f_m → 功率/温度 → 噪声口径**
@@ -144,9 +144,9 @@ description: SpectroLink 子服务器 server-lites（L2 参考，AI 自动读取
 
 ### 4. 结果校验（硬约束）
 
-每次出图或给定量结论前，必须通过 `lites_review` 或返回值里的校验字段。`fail` 时不得下结论，须先修复。
+每次绘图或给出定量结论前，必须通过 `lites_review` 或返回值里的校验字段。`fail` 时不得下结论，须先修复。
 
-### 5. 出图规范（精简版：形状是主角，文字是配角）
+### 5. 绘图规范（精简版：形状是主角，文字是配角）
 
 - **图面只有曲线+坐标轴**：不加总标题、不加子图标题、不堆参数说明
 - **图例只写化学式/信号名**，不带浓度、不带参数
@@ -198,7 +198,7 @@ description: SpectroLink 子服务器 server-lites（L2 参考，AI 自动读取
 即用 HITRAN 多线剖面替换单线，密集谱区的邻近线贡献完整保留；不传 `gas` 则用
 `line_strength` 的单线近似。
 
-## 关键物理约束（已知坑点）
+## 关键物理约束（已知问题）
 
 | 约束 | 说明 |
 |------|------|
@@ -208,7 +208,7 @@ description: SpectroLink 子服务器 server-lites（L2 参考，AI 自动读取
 | MPC 在 LITES 里是负收益 | 多次反射损失功率（信号 ∝ P），259 反射 R=0.98 → 仅 0.5% 吞吐。不要按 TDLAS 惯性推荐长光程池 |
 | 温度失谐 | f0 温度系数 −30（石英）/ −80（LiNbO₃）ppm/K。ΔT=1 K 已能造成可测失谐，`lites_resonance` 定量算 |
 | τ_acc 是换算量 | `τ_acc = Q/(π·f0)` 由文献结论换算（约 19.7% 量级），**不是独立实测**，勿当作精确值引用 |
-| 点值当带误差结果 | 未建模项（自展宽、线混合、PD 暗电流、前放 1/f、Allan 漂移）可能主导真实误差。给定量结论时按台账披露 |
+| 点值当带误差结果 | 未建模项（自展宽、线混合、PD 暗电流、前放 1/f、Allan 漂移）可能主导真实误差。给出定量结论时按台账披露 |
 | 反演 σ 必须在目标浓度上求 | 噪声不随吸收信号等比缩放，跨浓度外推可差一个量级 |
 
 ## 部署方式

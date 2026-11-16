@@ -22,66 +22,66 @@ TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
 
 </div>
 
-> **一句话**：告诉 AI 你的气体、波段和工况，它给你仪器级仿真波形、谱图、检测限与不确定度——全程本地跑，不需要 API key。
+> **一句话**：输入气体、波段与工况，系统输出仪器级仿真波形、谱图、检测限与不确定度；全程本地运行，无需 API key。
 
 ---
 
-## 🚀 三秒上手
+## 🚀 快速开始
 
-**第一次用，复制下面这段给 AI**：
+**首次使用时，可将以下指令整体提交给 AI 助手**：
 
 ```text
-请帮我把 SpectroLink 装好并跑通，不要让我手动改路径：
-1. git clone https://github.com/LKF0402/spectrolink.git 到固定目录，确认 Python ≥ 3.10。
-2. 执行 pip install -r requirements.txt 和 pip install -e ./spectrolink_core。
-3. 在 MCP 客户端只启用 spectrolink-tdlas：command 用本机 python 绝对路径，args 用 server-tdlas/tools/tdlas_mcp.py 的绝对路径。
-4. 安装仓库根目录 SKILL.md 为 Skill。
-5. 运行 python server-tdlas/tools/tdlas_mcp.py --selftest。
-最后告诉我装在哪、改了哪个配置、最初三句可以怎么说；失败就停下报告。
+请协助完成 SpectroLink 的安装与自检，无需人工修改路径：
+1. 将 https://github.com/LKF0402/spectrolink.git 克隆至固定目录，并确认 Python ≥ 3.10。
+2. 执行 pip install -r requirements.txt 与 pip install -e ./spectrolink_core。
+3. 在 MCP 客户端中仅启用 spectrolink-tdlas：command 使用本机 python 绝对路径，args 使用 server-tdlas/tools/tdlas_mcp.py 的绝对路径。
+4. 将仓库根目录 SKILL.md 安装为 Skill。
+5. 执行 python server-tdlas/tools/tdlas_mcp.py --selftest。
+完成后请报告安装位置、修改的配置文件及最初三条可用指令；若任一步骤失败，请终止并报告具体环节。
 ```
 
-装好后直接说：`画一个 CH4 @ 2968.5 cm-1 的 WMS 图，50 ppm，10 cm`。
+安装完成后，可直接输入：`绘制 CH4 在 2968.5 cm-1、50 ppm、10 cm 光程下的 WMS 图`。
 
-> 需要更细的安装要求（含客户端配置找不到时怎么处理）？展开下面的「完整安装指令」。AI 无法执行本地命令时，看「手动安装与自检」。
+> 需要完整的七步安装要求（包括客户端配置文件缺失时的处理）？展开下方「完整安装指令」。若 AI 无法执行本地命令，参见「手动安装与自检」。
 
 <details>
-<summary>完整安装指令（复制给 AI）</summary>
+<summary>完整安装指令（提交给 AI）</summary>
 
 ```text
-我要用 SpectroLink（多技术光谱仿真 MCP，仓库 https://github.com/LKF0402/spectrolink）跑 TDLAS/WMS 光谱仿真。请全程帮我搭好，不要让我手动改路径：
+拟使用 SpectroLink（多技术光谱仿真 MCP，仓库 https://github.com/LKF0402/spectrolink）开展 TDLAS/WMS 光谱仿真。请协助完成全部安装，无需人工修改路径：
 
-1. 确认本机 Python ≥ 3.10；版本不够先告诉我怎么装，不要猜。
-2. 选一个固定目录执行 git clone https://github.com/LKF0402/spectrolink.git，记下它的绝对路径。
+1. 确认本机 Python ≥ 3.10；若版本不足，请说明安装方法，不作推测。
+2. 选择固定目录执行 git clone https://github.com/LKF0402/spectrolink.git，并记录其绝对路径。
 3. 进入该目录，依次执行 pip install -r requirements.txt、pip install -e ./spectrolink_core。
-4. 找到我当前 MCP 客户端（Claude Desktop / Cursor / Cline / VS Code 之一）的配置文件，写入 spectrolink-tdlas：
+4. 查找当前 MCP 客户端（Claude Desktop / Cursor / Cline / VS Code 之一）的配置文件，写入 spectrolink-tdlas：
    command = 本机 python 的绝对路径；args = [该目录绝对路径 + "/server-tdlas/tools/tdlas_mcp.py"]
-   lites / ndir / crds / ftir / doas 五个先 disabled，我要用时再开。
-   找不到客户端配置文件时，把该目录的 mcp.config.example.json 按真实路径改好交给我，并说明该贴到哪。
-5. 把该目录的 SKILL.md 安装成 Skill（按我客户端的 Skill 目录约定放；不确定就告诉我该放哪）。它是唯一入口，子技术说明 AI 会按需自动读，别再单独装。
-6. 执行 python server-tdlas/tools/tdlas_mcp.py --selftest，把结果贴给我。
-7. 最后告诉我：装在哪、改了哪个配置文件、最初三句可以直接说的话。
+   lites / ndir / crds / ftir / doas 五项暂设为 disabled，待需要时启用。
+   若无法定位客户端配置文件，请将 mcp.config.example.json 按真实路径配置后说明应放置的位置。
+5. 将仓库根目录 SKILL.md 安装为 Skill（按客户端 Skill 目录约定放置；若不确定，请说明目标位置）。该文件为唯一入口，子技术说明由 AI 按需读取，无需分别安装。
+6. 执行 python server-tdlas/tools/tdlas_mcp.py --selftest，并反馈结果。
+7. 最后报告：安装位置、修改的配置文件、最初三条可直接使用的指令。
 
-任何一步失败就停下来报告卡点，不要跳过。
+若任一步骤失败，请终止并报告具体环节，请勿跳过。
 ```
 
 </details>
 
-行为规范见 [SKILL.md](./SKILL.md)，更多话术见 [USAGE.md](./USAGE.md)。
+行为规范见 [SKILL.md](./SKILL.md)，更多交互示例见 [USAGE.md](./USAGE.md)。
 
 ## 🧪 免标定（v1.1.0 · 仅 TDLAS / LITES）
 
-**不是"不标定"，是"用零基线 + 一个锚点 + 仪器状态，替掉整条浓度标定曲线"。**
+**免标定并非取消标定，而是以零基线 + 一个锚点 + 仪器状态替代整条浓度标定曲线。**
 
-| 技术 | 模式 | 你至少要交什么 | 能得到什么 |
+| 技术 | 模式 | 所需数据 | 输出 |
 |---|---|---|---|
-| **TDLAS** | `shape` | 2f 的 X/Y（建议加 0% 背景）、T/P/L、线中心 | 波形一致性、复增益/相位、自动搜出的 m/扫描跨度；浓度走 `absolute` / `anchored` |
+| **TDLAS** | `shape` | 2f 的 X/Y（建议加 0% 背景）、L/T/P、线中心 | 波形一致性、复增益/相位、自动确定的 m 与扫描跨度；浓度由 `absolute` / `anchored` 输出 |
 | | `absolute` | 同光路 0% 气 I0、L、T/P | `x=A_peak/(α_pure·L)` |
 | | `anchored` | 已知浓度参考 + 同 m/同轴 2f | `x=x_ref·(A/A_ref)` |
 | **LITES** | `anchored` | 参考浓度 2f、功率监测、f0/Q | `x=x_ref·(V/V_ref)·(P_ref/P)·(R_ref/R)` |
 
-- 新手三步：**A 零基线**（0% 气/暗，前后各一次）→ **B 锚点**（I0 或已知浓度参考）→ **C 仪器状态**（L/T/P、调制、锁相、采样率）。
-- 推荐路径：单路 2f 先做 `shape` 波形确认，再按手头数据走 `absolute`（有 I0）或 `anchored`（有已知浓度参考）。
-- LITES 采用单点锚定 + 功率/共振归一化，稳定、易落地；完整数据清单与 CSV 列名：[docs/CALIB_FREE.md](./docs/CALIB_FREE.md)。
+- 操作顺序：**A 零基线**（0% 气/暗，前后各一次）→ **B 锚点**（I0 或已知浓度参考）→ **C 仪器状态**（L/T/P、调制、锁相、采样率）。
+- 推荐路径：单路 2f 先以 `shape` 确认波形，再根据现有数据选择 `absolute`（具备 I0）或 `anchored`（具备已知浓度参考）。
+- LITES 采用单点锚定 + 功率/共振归一化，稳定性好且易于实施；完整数据清单与 CSV 列名：[docs/CALIB_FREE.md](./docs/CALIB_FREE.md)。
 
 ## 📊 效果展示
 
@@ -106,14 +106,14 @@ TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
 
 - **全链路建模**：DAQ 调制 → 激光调谐 → HITRAN 吸收 → PD → ADC → 数字锁相；可选 etalon 条纹、RIN、1/f 漂移、RAM/AM
 - **七技术一体**：TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS，独立 server 按需加载、共用 `spectrolink_core` 物理内核
-- **免标定（1.1.0）**：TDLAS `shape/absolute/anchored` 与 LITES `anchored`；零基线 + 一个锚点 + 仪器状态，替掉浓度标定曲线；新手数据清单见 [docs/CALIB_FREE.md](./docs/CALIB_FREE.md)
+- **免标定（1.1.0）**：TDLAS `shape/absolute/anchored` 与 LITES `anchored`；零基线 + 一个锚点 + 仪器状态，替代浓度标定曲线；最小数据清单见 [docs/CALIB_FREE.md](./docs/CALIB_FREE.md)
 - **混合气多组分**：`mixture` 严格按 `α = Σ xᵢ·α_pureᵢ(T,P)` 逐点相加（**不用 x·P 当分压**），并返回各组分归因
 - **AI 交互契约**：六个技术的仪器/分析工具统一返回 `interaction` 与机器可读 `next_required_actions`；CRDS / NDIR / FTIR / DOAS 的动作只依据各自真实返回字段（浓度域、拟合质量、谱源降级、缺输入等），selftest 不参与记账
 - **保真度台账**：默认生效 11 项 / 需显式开启 6 项，结果随附台账；已建模项与适用范围一目了然
 - **可信度分层**：10 项物理校验与交互合规**分别**计分
 - **可复现 + 离线门禁**：`seed=0` 逐位可复现；契约自检 193 项与保真度审计均为 CI 硬门禁（不依赖网络）
 
-其他：`return_xy` 透出锁相 X/Y 用于 RAM/AM 诊断；`tdlas_invert(n_repeats>0)` 给测量不确定度（仅统计分量）；`x_list` 多浓度同图。细节见 [TECHNICAL.md](./TECHNICAL.md) 与 [docs/VALIDATION.md](./docs/VALIDATION.md)。
+其他：`return_xy` 透出锁相 X/Y 用于 RAM/AM 诊断；`tdlas_invert(n_repeats>0)` 提供测量不确定度（仅统计分量）；`x_list` 支持多浓度同图。细节见 [TECHNICAL.md](./TECHNICAL.md) 与 [docs/VALIDATION.md](./docs/VALIDATION.md)。
 
 ## 📖 它是什么
 
@@ -184,11 +184,11 @@ DAQ 三角波+正弦调制 → 激光调谐(含二次非线性) → HITRAN 气�
 | lites_resonance / lites_sweep | 共振跟踪 / 参数扫描 |
 | lites_waveform | 合成 2f 波形 + 6 子图（吸收线型 / 机械传递 / 热扩散 / 2f / 扣基线 / 噪声预算） |
 | lites_invert | 实测 2f 幅值 → 摩尔分数（含反推自洽性校验） |
-| ⭐ **lites_calibfree** | **免标定**：单点已知浓度 + 功率/共振归一化；`mode=guide` 给数据清单 |
+| ⭐ **lites_calibfree** | **免标定**：单点已知浓度 + 功率/共振归一化；`mode=guide` 提供数据清单 |
 | lites_review | 实验方案评审：LITES 7 类失效模式逐条检查 |
 | lites_compare | 多器件统一口径对比（同线强/浓度/噪声） |
 | lites_noise_budget | 噪声预算拆分：1/f / 白噪声 / TIA 各自占比 |
-| lites_guide | LITES 交互协议与术语检索（新手先调这个） |
+| lites_guide | LITES 交互协议与术语检索（建议作为初始入口） |
 | lites_selftest | 物理内核自检（标定自洽 / 标度律 / 饱和 / 失谐） |
 
 #### 新技术工具（server-ndir / server-crds / server-ftir / server-doas）
@@ -237,11 +237,11 @@ python server-doas/tools/doas_mcp.py --selftest     # DOAS 服务器自检（离
 
 #### ⚠️ Skill 不是可选项
 
-`SKILL.md` 不是文档，而是 **AI 的行为规范**（唯一安装入口）：服务器只能保证 AI「看到」`next_required_actions`，Skill 才规定 AI「照做」——保留默认值必须显式标注、器件参数来源（`source`）必须如实填写、设备命名须含型号/波长。
+`SKILL.md` 不是文档，而是 **AI 的行为规范**（唯一安装入口）：服务器仅保证 AI 能读取 `next_required_actions`，Skill 才约束 AI 执行后续动作——保留默认值必须显式标注、器件参数来源（`source`）必须如实填写、设备命名须含型号/波长。
 
-**渐进式披露架构**：根 `SKILL.md` 只含技术选择矩阵与自动调度协议（L1）；各技术细节（路由表、默认披露、专属坑点）在 `server-<技术>/SKILL.md`（L2），由 AI 按任务自动读取——**用户只需安装根 SKILL 一个技能**，无需按技术分别安装。
+**渐进式披露架构**：根 `SKILL.md` 只含技术选择矩阵与自动调度协议（L1）；各技术细节（路由表、默认披露、专属注意事项）在 `server-<技术>/SKILL.md`（L2），由 AI 按任务自动读取——**用户只需安装根 SKILL 一个技能**，无需按技术分别安装。
 
-安装（任选其一）：放进客户端的 Skill 目录；或让 AI 直接读取该文件作为行为规范。
+安装（任选其一）：放置于客户端 Skill 目录；或由 AI 直接读取该文件作为行为规范。
 
 #### 🏃 运行形态：仅本地
 
@@ -250,7 +250,7 @@ python server-doas/tools/doas_mcp.py --selftest     # DOAS 服务器自检（离
 那套远程草稿作用有限、维护成本高，已整体移除（见 CHANGELOG 第二十三轮）。
 
 ```bash
-python server-tdlas/tools/tdlas_mcp.py --selftest   # 本地跑一遍自检
+python server-tdlas/tools/tdlas_mcp.py --selftest   # 本地执行一次自检
 ```
 
 </details>
@@ -262,7 +262,7 @@ python server-tdlas/tools/tdlas_mcp.py --selftest   # 本地跑一遍自检
 |---|---|
 | [TECHNICAL.md](./TECHNICAL.md) | 物理原理、算法实现、参数表、已知近似（含 §8 多技术 server 章节） |
 | [docs/VALIDATION.md](./docs/VALIDATION.md) | 可信度分层、校验判据口径、已知局限 |
-| [docs/CALIB_FREE.md](./docs/CALIB_FREE.md) | 免标定新手引导：三类数据、TDLAS/LITES 模式、CSV 列名、检查表 |
+| [docs/CALIB_FREE.md](./docs/CALIB_FREE.md) | 免标定指南：三类数据、TDLAS/LITES 模式、CSV 列名、检查表 |
 | [docs/ADAPTATION_MATRIX.md](./docs/ADAPTATION_MATRIX.md) | 多技术适配矩阵与接入流程 |
 | [SKILL.md](./SKILL.md) | AI 交互规范与工具使用协议 |
 | [spectrolink_core/README.md](./spectrolink_core/README.md) | 共用物理内核说明 |

@@ -18,7 +18,7 @@
 | `lites_mdl` | 最小可探测浓度 MDL 与噪声预算 |
 | `lites_device` | 器件库（**仅内置演示默认 qtf-commercial-decapped，真实音叉交互获取**） |
 | `lites_resonance` / `lites_sweep` | 共振跟踪 / 参数扫描 |
-| `lites_waveform` / `lites_invert` | 波形出图（六子图：DC 包络 / 载波 / **R₂f 幅值** / 多浓度对比 / 标定 / **Allan 方差**，τ 全整数网格 1 s 精度）/ 浓度反演 |
+| `lites_waveform` / `lites_invert` | 波形绘图（六子图：DC 包络 / 载波 / **R₂f 幅值** / 多浓度对比 / 标定 / **Allan 方差**，τ 全整数网格 1 s 精度）/ 浓度反演 |
 | `lites_noise_budget` / `lites_review` / `lites_guide` | 噪声预算 / 结果校验 / AI 交互协议 |
 | `lites_selftest` | 全链路自检 |
 

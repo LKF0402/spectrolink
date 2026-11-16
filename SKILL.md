@@ -9,7 +9,7 @@ description: SpectroLink —— 多技术光谱传感仿真 MCP 总入口。触�
 
 1. **不内置仪器**：所有技术默认参数仅作演示占位（已在各工具 description 标注），真实器件/工况参数一律经交互获取，来源标记 `datasheet / user / ai / calibration / unspecified`，禁止把推断值标成 datasheet。
 2. **输出为理论仿真**，严禁冒充实验数据；写论文数值须附 `provenance.engine_version` 与 `line_table.sha256_16`。
-3. **AI 出图必须自查**：每次交付图片前先 Read 检查（坐标轴、峰值可见性、字体、剔除区），发现问题先修再交付。
+3. **AI 绘图必须自查**：每次交付图片前先 Read 检查（坐标轴、峰值可见性、字体、剔除区），发现问题先修正再交付。
 
 ## 1. 技术选择决策矩阵（先选技术 → 再读该技术子 SKILL）
 
@@ -28,34 +28,34 @@ description: SpectroLink —— 多技术光谱传感仿真 MCP 总入口。触�
 
 **调度流程（每次任务自动执行）**：
 1. 用 §1 决策矩阵选技术 → 定位 server。
-2. **按需自动 Read** `<server>/SKILL.md`：任务需要调该技术工具、给定量结论、出图或披露参数时，必须先 Read 其 L2（含路由表、默认披露、坑点）。未 Read 前不得调该技术工具。
+2. **按需自动 Read** `<server>/SKILL.md`：任务需要调用该技术工具、输出定量结论、绘图或披露参数时，必须先 Read 其 L2（含路由表、默认披露、注意事项）。未 Read 前不得调用该技术工具。
 3. 按 L2 工具路由表调用；处理返回的 `validation` / `next_required_actions`。
 
 **披露深度分级（自动选择，够用即止）**：
 | 深度 | 何时 | 披露内容 |
 |---|---|---|
 | L1 浅 | 仅技术选型/方案对比/问答 | 决策矩阵一行 + 技术定位 |
-| L2 中 | 调用工具/给定量结果 | Read 目标 server SKILL.md，披露该技术路由+坑点 |
-| L3 深 | 出图/论文数值/疑难排查 | 在 L2 基础上展开参数表、绘图规范、provenance |
+| L2 中 | 调用工具/输出定量结果 | Read 目标 server SKILL.md，披露该技术路由与注意事项 |
+| L3 深 | 绘图/论文数值/疑难排查 | 在 L2 基础上展开参数表、绘图规范、provenance |
 
 **切换技术**：任务中途改技术时，重新执行调度流程（读新 server 的 L2），旧技术 L2 可弃。
 
 ## 3. 通用硬约束（各技术子 SKILL 继承）
 
 - **交互契约**：`validation.overall=fail` 不得下结论先修；`warn` 须在回答披露。
-- **参数优先级**：① 用户实测 → ② 器件型号 datasheet（联网核验）→ ③ 标定 → ④ 默认值+显式标注。`clarify.needed=true` 必须先问再出图。
-- **出图**：用户说"画图"必须传 `save_png=true`；纵轴只按有效数据区定；图面注明技术名、关键参数与"理论仿真"。
+- **参数优先级**：① 用户实测 → ② 器件型号 datasheet（联网核验）→ ③ 标定 → ④ 默认值+显式标注。`clarify.needed=true` 时必须先询问再绘图。
+- **绘图**：用户要求绘图时必须传 `save_png=true`；纵轴只按有效数据区确定；图面注明技术名、关键参数与“理论仿真”。
 - **自检**：每个 server 提供 `*_selftest`；改代码后全量回归。
 
 ## 3.1 免标定（仅 TDLAS / LITES，v1.1.0）
 
 - **TDLAS**：`tdlas_calibfree` 三种模式——`shape`（波形一致性，`x=null`）、`absolute`（需 I0 透射）、`anchored`（单点已知浓度）。浓度走 `absolute` / `anchored`。
-- **LITES**：`lites_calibfree` 只做 `anchored`（单点参考 + 功率监测 + 共振归一化）。单点锚定后，同器件、同波长可跨浓度直接出结果。
-- **新手数据清单**：零基线（0% 气/暗）+ 绝对锚点（I0/参考浓度）+ 仪器状态（L/T/P/调制/锁相/采样）；详见 `docs/CALIB_FREE.md`。
+- **LITES**：`lites_calibfree` 仅实现 `anchored`（单点参考 + 功率监测 + 共振归一化）。单点锚定后，同器件、同波长可跨浓度输出结果。
+- **最小数据清单**：零基线（0% 气/暗）+ 绝对锚点（I0/参考浓度）+ 仪器状态（L/T/P/调制/锁相/采样）；详见 `docs/CALIB_FREE.md`。
 
 ## 4. 物理内核与数据
 
-- 共用 `spectrolink_core`（HITRAN 线表/吸收谱 + 数字锁相基座 `lockin`），本地缓存 `Hitran_Data/`；首次下载慢，已缓存后快。
+- 共用 `spectrolink_core`（HITRAN 线表/吸收谱 + 数字锁相基座 `lockin`），本地缓存 `Hitran_Data/`；首次下载耗时较长，缓存后效率较高。
 - 抓取窗比计算窗外扩（`fetch_margin`）：线表按窗边多抓 ΩWingHW·Γ 的翼宽，否则窗外线翼被静默丢弃（窗缘可低 2% 量级）。
 - 缓存目录优先级：环境变量 `SPECTROLINK_DATA_DIR` > `~/.spectrolink/Hitran_Data` > 仓库内。
 - 多气体混合：`spectrolink_core.hitran.absorption_mixture()` 自动插值到统一波数网格。
@@ -70,7 +70,7 @@ description: SpectroLink —— 多技术光谱传感仿真 MCP 总入口。触�
 
 ## 6. 子 SKILL 索引
 
-- `server-tdlas/SKILL.md` — TDLAS-DA/WMS（六子图、设备库、物理坑点）
+- `server-tdlas/SKILL.md` — TDLAS-DA/WMS（六子图、设备库、物理约束与注意事项）
 - `server-lites/SKILL.md` — LITES（QTF、τ_acc、η_dev）
 - `server-crds/SKILL.md` — CRDS（τ(ν)、ring-down、动态范围）
 - `server-ndir/SKILL.md` — NDIR（双通道比值、标定）

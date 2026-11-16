@@ -72,7 +72,7 @@
 - 契约隔离修正：状态文件路径归状态层后，测试隔离必须同时打到 `tdlas_state`，否则会读用户真实设备库、在本地出现假失败；现恢复 191 通过 / 0 失败 / 0 跳过
 - 契约项数口径 189 → 191（README、VALIDATION、ADAPTATION_MATRIX）
 
-### 第二十轮：全仓口径整改 + 一键接入可跑通
+### 第二十轮：全仓口径整改 + 一键接入可正常运行
 - 新增 `spectrolink_core/pyproject.toml`：此前 `pip install -e ./spectrolink_core` 直接报 "not a Python project"，README / CI / 一键 prompt 全部卡在这一步
 - README 新增零占位一键接入 prompt（AI 自己 clone / 装依赖 / 写 MCP 配置 / 装 Skill / 自检），快速上手补 `git clone`
 - 旧仓库名清零：README（CI badge、引用）、USAGE（标题、链接）、server-lites（README / TECHNICAL / CHANGELOG / docs/VALIDATION）

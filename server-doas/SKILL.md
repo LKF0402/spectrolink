@@ -36,9 +36,9 @@ DOAS 在**紫外-可见宽带域**分离"慢变背景"与"分子窄带吸收"：
 | `poly_deg` | 3 | 慢变背景多项式阶数 |
 | `noise_frac` | 0.0 | 相对高斯噪声 σ |
 
-## 物理坑点（必查）
+## 物理约束与注意事项（必查）
 
-1. **单位制陷阱**：DOAS 用**波长 nm + σ cm²/molecule**，与 TDLAS/CRDS/FTIR 的**波数 cm⁻¹ + α cm⁻¹** 完全不同，跨技术对比必须先换算（λ[nm] ↔ ν[cm⁻¹] = 1e7/λ）。
+1. **单位制差异**：DOAS 用**波长 nm + σ cm²/molecule**，与 TDLAS/CRDS/FTIR 的**波数 cm⁻¹ + α cm⁻¹** 完全不同，跨技术对比必须先换算（λ[nm] ↔ ν[cm⁻¹] = 1e7/λ）。
 2. **多项式阶数过拟合**：poly_deg 过高会吃掉分子窄带结构 → 浓度低估；选阶数看差分残差谱，非越低越好。
 3. **截面谱必须实测/权威库**：σ(λ) 温压依赖强（O₄ 等），默认演示截面不可当真实值引用。
 4. **宽带源包络不可比**：I₀ 与 I 必须同一次测量链路，否则 P(λ) 拟合不干净。
@@ -46,7 +46,7 @@ DOAS 在**紫外-可见宽带域**分离"慢变背景"与"分子窄带吸收"：
 
 ## 交互契约
 
-- 仪器/分析工具返回 `interaction` 与 `next_required_actions`；`conclusion_allowed=false`（缺 I/I₀/σ、浓度越界）时不得给定量结论，`must_disclose` 项须在同一回答说明。`t_doas_selftest` 不返回契约块。
+- 仪器/分析工具返回 `interaction` 与 `next_required_actions`；`conclusion_allowed=false`（缺 I/I₀/σ、浓度越界）时不得给出定量结论，`must_disclose` 项须在同一回答说明。`t_doas_selftest` 不返回契约块。
 - `validation.overall`：`fail` 不得下结论；`warn`（默认演示占位）须披露；`checks[]` 含浓度域、峰光学厚度、反演误差、标定 R²/斜率/归一化最大误差。
 - `t_doas_invert` 不传数组时只返回 `usage`，**`x=None` 不是结果**，必须阻断结论。
 - 标定输出 `slope`（反演浓度/真值）检验算法；`max_abs_err_frac` 已按浓度满量程归一化，勿再按单点相对误差解读。

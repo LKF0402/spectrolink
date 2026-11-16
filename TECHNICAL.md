@@ -1,6 +1,6 @@
 # SpectroLink 技术文档
 
-> 面向专业技术员：说明本项目的**物理模型、逐级链路实现、关键算法、默认参数、已知近似与实现陷阱**。
+> 面向专业技术员：说明本项目的**物理模型、逐级链路实现、关键算法、默认参数、已知近似与实现风险**。
 > 配套文档：`README.md`（功能与快速开始）、`SKILL.md`（AI 使用规范）、`CHANGELOG.md`（变更记录）。
 
 ## 目录
@@ -29,7 +29,7 @@
   - [4.12 免标定内核（calibfree，v1.1.0）](#412-免标定内核spectrolink_corecalibfreepy-v110)
 - [5. 默认参数表](#5-默认参数表)
 - [6. 已知近似与局限](#6-已知近似与局限)
-- [7. 实现陷阱（踩坑记录）](#7-实现陷阱踩坑记录)
+- [7. 实现风险与历史问题](#7-实现风险与历史问题)
 - [8. 多技术 server（NDIR / CRDS / FTIR / DOAS）](#8-多技术-servern dir--crds--ftir--doas)
 - [9. 参考文献](#9-参考文献)
 
@@ -77,7 +77,7 @@ $$V(\nu;\sigma,\gamma)=\int_{-\infty}^{\infty}G(\nu';\sigma)\,L(\nu-\nu';\gamma)
 **三条安全纪律**（实现要点）：
 
 1. **窗口安全**：线表必须真正覆盖请求窗口；未覆盖则按窗口**重新抓取**，避免"旧表静默缺线"
-2. **空谱硬报错**：0 条线直接 `raise`，绝不静默返回平谱
+2. **空谱显式报错**：0 条线直接 `raise`，绝不静默返回平谱
 3. **抓取窗外扩**：HAPI 的 `WavenumberWingHW` 以 **HWHM 倍数**为单位，且选线循环遍历**表内每一条线**、不按输出窗口过滤（`hapi.py:53672`）；因此窗外 $\Omega_{\mathrm{wing}}\cdot\Gamma$ 范围内的线，其翼仍会落进计算窗。线表按 **计算窗 ± `fetch_margin(wingHW, P)`** 抓取（$\Gamma\propto P$，下限 1.5 cm⁻¹），输出网格仍严格等于 `WavenumberRange`；`info.fetch_window_cm-1` 披露两者之差。
 
    实测（CH₄ 2967.6–2969.2 cm⁻¹，`wingHW=20`，296 K / 1 atm）：外扩 1.0 cm⁻¹ 后窗缘偏差压到 **0.01%**，1.6 cm⁻¹ 到 **0.00%**，峰值保持一致；默认按 1.6 cm⁻¹ 窗口外扩，兼顾精度与速度。
@@ -141,7 +141,7 @@ P   = max(eta_IP * (i - i_th), 0)                             # mW，低于阈�
 
 **关键符号**：默认 `dnu_dI = -0.088 < 0`（真实 DFB 激光：电流↑ → 结温↑ → 波长红移 → 波数↓）。
 
-这导致一个**重要的方向耦合**（见 §7 陷阱）：
+这导致一个**重要的方向耦合**（见 §7 实现风险与历史问题）：
 
 > **波数递增 ⟺ 电流递减 ⟺ 光强递减**（三者由 $d\nu/dI<0$ 与 $P\propto I$ 耦合）
 
@@ -350,7 +350,7 @@ $$T(\tilde\nu)=\frac{1}{1+F\sin^2(\delta/2)},\qquad \delta=\frac{2\pi\tilde\nu}{
 | 审计 | 问什么 | 手段 |
 |---|---|---|
 | `audit_effects()` | 表里声称的符号/常量真的在源码里吗？（防"表漂了"） | 在 `tdlas_sim.py` / `tools/*.py` 中检索 `evidence` 字面量 |
-| `audit_parameters()` | 有没有"`inputSchema` 声明了却从未进入引擎"的死参数？ | 用假引擎截获真正进入引擎的 `kwargs`，与 schema 的 `properties` 求差（设备引用 / 会话 / 出图开关在**显式白名单**内） |
+| `audit_parameters()` | 有没有"`inputSchema` 声明了却从未进入引擎"的死参数？ | 用假引擎截获真正进入引擎的 `kwargs`，与 schema 的 `properties` 求差（设备引用 / 会话 / 绘图开关在**显式白名单**内） |
 | `missing_effects()` | 哪些效应**没**建模（必须向用户披露）？ | 筛 `status == "off"` |
 
 **对 AI 的接口**：`tdlas_guide` 返回 `fidelity = {implemented, optional, not_implemented, disclosure_rule}`，由 `fidelity_summary()` **转发**而成——不复制内容，因为复制就会重新引入"表漂了"。配套 `AI_INTERACTION_GUIDE["fidelity_reporting"]` 规定披露口径，`must_disclose` 第 **⑧** 项即指向它。
@@ -388,7 +388,7 @@ out["next_required_actions"] = [
    "action": "…", "evidence_fields": ["assumptions"], "values": {…}, "template": "…"}, …]
 ```
 
-- **三级严重度**：`block_conclusion`（不得给定量结论）/ `must_disclose`（结论可给但必须说明）/ `advisory`。
+- **三级严重度**：`block_conclusion`（不得给出定量结论）/ `must_disclose`（结论可给但必须说明）/ `advisory`。
 - **`evidence_fields` + `values`**：动作指向本次返回里的具体字段并直接给数字；AI 按 id 执行即可，
   不必自己归纳"该报什么、去哪找数"。
 - **按需下发**：本会话已下发且语境未变的动作不再重复（沿用 `alpha_report.needs_report` 的既有范式），
@@ -400,7 +400,7 @@ out["next_required_actions"] = [
    36 问题库；若把"未确认"当成阻断，`conclusion_allowed` 会**恒为 false** 并失去信息量。
    阻断只留给"这个数本身不可用"（校验 fail / 扫描含暗区 / 反演越界），缺参数走 `must_disclose`。
 2. **不隐藏数据**。曾考虑过"结论不被允许时把定量字段置 `null`"，未采纳：首次调用（必然有默认参数）
-   就会拿不到任何数，且用户无法自行复核。改为"数据保留、结论受控"，与 `mole_frac_status` /
+   就会无法获得任何数值，且用户无法自行复核。改为"数据保留、结论受控"，与 `mole_frac_status` /
    `*_valid` 的既有范式一致。
 
 **局限（诚实声明）**：服务器看不到模型最终的措辞，故本层只保证"要求已下发且不重复骚扰"，
@@ -491,11 +491,11 @@ out["next_required_actions"] = [
 
 ---
 
-## 7. 实现陷阱（踩坑记录）
+## 7. 实现风险与历史问题
 
 > 本节记录**实际犯过的错误**，技术员修改代码时务必留意。
 
-| # | 陷阱 | 症状 | 正确做法 |
+| # | 问题 | 症状 | 正确做法 |
 |---|---|---|---|
 | 1 | **`wn_ref` 与 `wn_center` 错位** | 2f 幅度极小、峰位对不上、全像噪声 | `wn_ref` 必须按 `wn_center` 反算对齐 |
 | 2 | **横轴用瞬时波数** | 曲线折成"水平条纹" | 横轴用**扫描波数**（不含 ±a 调制摆动） |
@@ -524,7 +524,7 @@ out["next_required_actions"] = [
 
 > **协议层单一实现**：JSON-RPC 解析、批量/通知、`tools/list`/`tools/call`、必填/未知键/类型校验、工具边界异常转错误体、stdio 循环，全部只在 `spectrolink_core/mcp_runtime.py` 定义（`make_handle_request` / `serve_stdio`）。各 server 仅提供 `SERVER_INFO` / `TOOLS` / `DISPATCH` 与 selftest 分支——此前六份各写一套，crds/ndir/ftir 不校验必填与未知键（拼错参数名被静默丢弃），doas 更弱（无批量、无校验）。状态文件原子写同理由 `spectrolink_core/jsonio.py` 提供；工况取值/物种缺省/设备参数校验/α 与条纹播报的判定与措辞在 `spectrolink_core/report_blocks.py`；动作证据解析、指纹与按需下发/`conclusion_allowed` 判定在 `spectrolink_core/interaction.py`；四技术交互接线在 `spectrolink_core/interaction_server.py`，`checks[]` 归并在 `spectrolink_core/validation.py`；保真度审计判定在 `spectrolink_core/fidelity.py`，各技术只留 EVIDENCE 表。
 
-> **Skill 渐进式披露（AI 调度层）**：根 `SKILL.md` 为唯一安装入口（L1），只含技术选择矩阵与自动调度协议；各技术细节（路由表 / 默认披露 / 专属坑点）在 `server-<技术>/SKILL.md`（L2），由 AI 按任务自动读取。披露深度分级：L1 浅（仅选型问答）→ L2 中（调工具 / 定量结果，需 Read 目标 L2）→ L3 深（出图 / 论文数值，展开参数表与 provenance）。用户只需安装根 SKILL 一个技能。
+> **Skill 渐进式披露（AI 调度层）**：根 `SKILL.md` 为唯一安装入口（L1），只含技术选择矩阵与自动调度协议；各技术细节（路由表 / 默认披露 / 专属注意事项）在 `server-<技术>/SKILL.md`（L2），由 AI 按任务自动读取。披露深度分级：L1 浅（仅选型问答）→ L2 中（调工具 / 定量结果，需 Read 目标 L2）→ L3 深（绘图 / 论文数值，展开参数表与 provenance）。用户只需安装根 SKILL 一个技能。
 
 ### 8.1 NDIR（非分散红外，server-ndir）
 

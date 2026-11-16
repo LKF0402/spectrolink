@@ -37,7 +37,7 @@ CRDS 不测透射光强，而测**腔内光子寿命 τ**：
 | `iso` | "all" | 同位素：None=主同位素，all=全部按丰度 |
 | `line_source` | "hitran" | hitran（离线自动降级高斯并披露）/ gaussian |
 
-## 物理坑点（必查）
+## 物理约束与注意事项（必查）
 
 1. **动态范围**：τ 与吸收呈倒数的强非线性。密集强带（如 CH4 2968 cm⁻¹，α_pure≈13 cm⁻¹）下 50 ppm 单程 αL≈0.065，对 R=0.999 腔 τ 缩短 >98%。**选线/定浓度时把 αL/(1−R) ≲ 0.1 量级**，否则 τ 短到无法测（需 GHz 采样）。
 2. **R 是等效值**：含镜面散射、镀膜吸收、衍射损耗，不能只按 datasheet 反射率。
@@ -48,7 +48,7 @@ CRDS 不测透射光强，而测**腔内光子寿命 τ**：
 
 ## 交互契约
 
-- 仪器/分析工具返回 `interaction` 与 `next_required_actions`：`conclusion_allowed=false` 时不得给定量结论；`must_disclose` 项须在同一回答说明。`t_crds_selftest` 不返回契约块。
+- 仪器/分析工具返回 `interaction` 与 `next_required_actions`：`conclusion_allowed=false` 时不得给出定量结论；`must_disclose` 项须在同一回答说明。`t_crds_selftest` 不返回契约块。
 - `validation.overall`：`fail` 不得下结论；`warn`（默认，因演示占位参数）须在回答披露"默认参数为演示占位"。`checks[]` 给出逐项判据（浓度域、反演误差、ring-down R²、谱源）。
 - `line_source=hitran` 但降级为高斯时，`disclosure` 必须原样转述——**降级谱非真实谱，不得当实测谱**。
 
