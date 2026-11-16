@@ -190,7 +190,7 @@ def main(argv):
     # 用例：一个孤立单线窗口 + 一个密集谱区窗口（后者检验逐线累加）
     cases = [
         ("H2O @7185.6（较孤立）", "H2O", 7185.6, 0.30, 2e-4),
-        ("CH4 @2968.5（221 线密集）", "CH4", 2968.5, 0.30, 2e-4),
+        ("CH4 @2968.5（密集谱区）", "CH4", 2968.5, 0.30, 2e-4),
     ]
     T, P = 296.0, 1.01325
     results = []
@@ -201,7 +201,10 @@ def main(argv):
 
         # 自己取线参数并独立累加（同窗口）
         formula, MM = th.resolve(species)
-        tt, cov = th.fetch_table(formula, MM, I, numin, numax)
+        # 与 HAPI 吸收路径保持同一取表口径：抓取窗需按 fetch_margin 外扩，
+        # 否则密集谱区会漏掉窗外线翼，积分偏低。
+        _dw = th.fetch_margin(20.0, P)
+        tt, cov = th.fetch_table(formula, MM, I, numin - _dw, numax + _dw)
         lp = hapi_line_params(tt, MM, I)
         molmass = hapi.ISO[(MM, I)][3] * 1.66053906660e-27     # amu → kg
         Q = hapi.PYTIPS2021(MM, I, T)
