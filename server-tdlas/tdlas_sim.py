@@ -2531,10 +2531,18 @@ def use_cjk_font(matplotlib):
 
 
 def _ppm_label(p):
-    """把摩尔分数（ppm 数）格式化成图例标签（与 plot_multi_x 同源）。"""
-    if p >= 1e-3:
+    """把 **ppm 数**格式化成图例标签（plot_multi_x 与六子图共用，口径唯一）。
+
+    ⚠ 入参是 ppm（= 摩尔分数 × 1e6），不是摩尔分数：旧版按 1e-3/1e-6 分档，
+    于 1000 ppm 输出 "1e+03 ppm"（科学计数法混进图例），且 ppm 恒 >1e-3 使后两档不可达。
+    现在按 100 / 1 分档，1000 ppm → "1000 ppm"。
+    """
+    p = float(p)
+    if p >= 100.0:
+        return f"{p:.0f} ppm"
+    if p >= 1.0:
         return f"{p:.3g} ppm"
-    if p >= 1e-6:
+    if p >= 1e-3:
         return f"{p:.2e} ppm"
     return f"{p:.1e} ppm"
 
@@ -2824,12 +2832,7 @@ def plot_multi_x(out_png, ppm, curves, x, xlabel, ylabel, title, valid=None):
     for i, (c, p) in enumerate(zip(curves, ppm)):
         c = np.asarray(c)
         col = cols[i]
-        if p >= 1e-3:
-            lab = f"{p:.3g} ppm"
-        elif p >= 1e-6:
-            lab = f"{p:.2e} ppm"
-        else:
-            lab = f"{p:.1e} ppm"
+        lab = _ppm_label(p)
         ax.plot(x, c, color=col, lw=1.3, label=lab)
         if valid is not None and valid[i] is not None:
             vmask = np.asarray(valid[i], dtype=bool)

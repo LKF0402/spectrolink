@@ -1442,13 +1442,38 @@ def _maybe_align_laser(wn_center, inst, explicit_keys, device_used=False):
         raise ValueError(
             f"激光参数非法：η_VI={float(eta_VI):g} 必须 >0、dν/dI={float(dnu_dI):g} 必须非零"
             f"（否则电压与波数之间没有可用的映射）。")
+    _auto_note = None
     if not r.get("fits_span"):
         # ⚠ 报错里必须用**实际生效**的扫描半宽 span_cm（可能来自 amp_V 反推），
         #   不能用 inst.get("scan_span_cm") —— 用户只给 amp_V 时它还是默认值，会报错数字。
-        raise ValueError(
-            f"扫描半宽 {float(span_cm):g} cm⁻¹ 需要 ±{r['amp_V']:.3g} V 驱动，"
-            f"超出驱动器 {ts.DRIVER_V_LO:.0f}–{ts.DRIVER_V_HI:.0f} V 量程 → 任何 wn_ref 都盖不住，"
-            f"请减小 scan_span_cm 或核对 η_VI。")
+        # ⚠ 真正的约束常是**阈值电流**（v_lo_eff = i_th/η_VI 常常已到 4 V），
+        #   旧版一律说"超出驱动器 0–5 V 量程"，会让人以为该调 offset_V——按那条改也必然失败。
+        _v_lo_eff = float(r.get("v_lo_eff") or ts.DRIVER_V_LO)
+        _amp = float(r["amp_V"])
+        _dnu_dV = abs(float(eta_VI) * float(dnu_dI))
+        _max_span = max(0.0, 0.5 * (ts.DRIVER_V_HI - _v_lo_eff) * _dnu_dV)
+        if ("scan_span_cm" not in explicit_keys) and ("amp_V" not in explicit_keys) and _max_span > 0:
+            # 用户没指定扫宽、只是用了默认值：默认值放不下时自动收窄（留 5% 裕度），并披露。
+            # 用户显式给了扫宽则**不擅自改**（那是他的实验设定，改了就成静默篡改）。
+            _orig_span = float(span_cm)
+            span_cm = 0.95 * _max_span
+            inst["scan_span_cm"] = float(span_cm)
+            inst.pop("amp_V", None)             # 由新扫宽重算幅值，避免旧幅值反向覆盖
+            _auto_note = (f"⚠ 默认扫描半宽 {_orig_span:g} cm⁻¹ 超出该激光器有效输出窗口"
+                          f"（阈值 {float(i_th):g} mA = {_v_lo_eff:.3g} V，上限 {ts.DRIVER_V_HI:.0f} V，"
+                          f"最大可用半宽 {_max_span:.3g} cm⁻¹），已自动收窄到 {span_cm:.3g} cm⁻¹；"
+                          f"需要固定扫宽请显式传 scan_span_cm。")
+            r = ts.laser_reach(float(wn_center), eta_VI=eta_VI, dnu_dI=dnu_dI, i_ref=i_ref,
+                               wn_ref=wn_ref0, scan_span_cm=span_cm, d2nu_dI2=d2, i_th=i_th)
+            if r.get("reachable"):
+                return _auto_note, None
+        else:
+            raise ValueError(
+                f"扫描半宽 {float(span_cm):g} cm⁻¹ 需要 ±{_amp:.3g} V 驱动，"
+                f"但该激光器在阈值电流 {float(i_th):g} mA（= {_v_lo_eff:.3g} V）之上的有效输出窗口"
+                f"只有 {_v_lo_eff:.3g}–{ts.DRIVER_V_HI:.0f} V（可用 ±{0.5 * (ts.DRIVER_V_HI - _v_lo_eff):.3g} V）"
+                f"→ 任何 wn_ref 都盖不住；本参数下最大可用半宽约 {_max_span:.3g} cm⁻¹。"
+                f"请减小 scan_span_cm，或改用阈值更低 / 调谐效率更高的激光器参数（i_th、η_VI·dν/dI）。")
     old = float(wn_ref0)
     # 自校验：重锚候选是按线性关系算的，二次模型（d2nu_dI2≠0）下必须复算确认真的可达，
     # 不能"算出个候选就直接用"——那正是本项目要消灭的静默伪造。
@@ -1472,6 +1497,8 @@ def _maybe_align_laser(wn_center, inst, explicit_keys, device_used=False):
             f"→ **已自动把 wn_ref 重锚到 {info['wn_ref_auto']:.6g} cm⁻¹**（理想激光器假设，"
             f"其余激光参数未变）。这不是你的真实硬件：请提供实测 wn_ref/dν/dI，或用 tdlas_device "
             f"保存真实激光器后以 laser= 引用；确认后本提示消失。")
+    if _auto_note:
+        note = _auto_note + " " + note
     return note, info
 
 
