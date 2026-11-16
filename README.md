@@ -115,7 +115,7 @@ TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
 - **AI 交互契约**：六个技术的仪器/分析工具统一返回 `interaction` 与机器可读 `next_required_actions`；CRDS / NDIR / FTIR / DOAS 的动作只依据各自真实返回字段（浓度域、拟合质量、谱源降级、缺输入等），selftest 不参与记账
 - **保真度台账**：默认生效 11 项 / 需显式开启 6 项，结果随附台账；已建模项与适用范围一目了然
 - **可信度分层**：10 项物理校验与交互合规**分别**计分
-- **可复现 + 离线门禁**：`seed=0` 逐位可复现；契约自检 193 项与保真度审计均为 CI 硬门禁（不依赖网络）
+- **可复现 + 离线门禁**：`seed=0` 逐位可复现；契约自检 200 项与保真度审计均为 CI 硬门禁（不依赖网络）
 
 其他：`return_xy` 透出锁相 X/Y 用于 RAM/AM 诊断；`tdlas_invert(n_repeats>0)` 提供测量不确定度（仅统计分量）；`x_list` 支持多浓度同图。细节见 [TECHNICAL.md](./TECHNICAL.md) 与 [docs/VALIDATION.md](./docs/VALIDATION.md)。
 

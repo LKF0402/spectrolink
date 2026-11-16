@@ -50,7 +50,7 @@ SpectroLink (monorepo)
 
 | server | 物理自检 | MCP 协议冒烟 | 传输 |
 |---|---|---|---|
-| server-tdlas | ✅ 契约自检 193 项 + 保真度审计 | ✅ | stdio |
+| server-tdlas | ✅ 契约自检 200 项 + 保真度审计 | ✅ | stdio |
 | server-lites | ✅ 17 项模块自检 | ✅ | stdio |
 | server-ndir | ✅ 5 锚点（forward/calibrate/invert 自洽） | ✅ initialize/list/call/-32601 | stdio |
 | server-crds | ✅ 5 锚点（τ₀=3.335µs@R=0.999/1m、拟合 R²=0.99997） | ✅ | stdio |
