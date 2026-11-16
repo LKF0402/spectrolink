@@ -65,6 +65,8 @@ description: SpectroLink —— 多技术光谱传感仿真 MCP 总入口。触�
 | HITRAN / 缓存 / 物理内核 | 对应 server `--selftest` + 1 组前后基准 | 六技术全量 |
 | 发布前 | 全量契约 + 两套 RPC + 受影响 selftest | — |
 
+统一入口：`python verify_changed.py` 按改动文件自动选检查；发布前用 `--full`。
+
 - 同一会话已 Read 且文件未改动，不重复 Read L2 或 schema。
 - 一次 profiling、一次修改、一次验证；同一基准不重复跑。
 - 信息足够即交付；阻塞问题一次问清，不跨轮反复试探。

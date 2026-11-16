@@ -159,6 +159,7 @@ description: SpectroLink 子服务器 server-tdlas（L2 参考，AI 自动读取
 
 ## H. 变更验证（按影响面，不跑全量）
 
+- 统一入口：在仓库根运行 `python verify_changed.py`；发布前用 `--full`。
 - 改文档/文案：不跑代码门禁。
 - 改单工具：`py_compile` + 该工具 1 正例 + 1 边界/反例。
 - 改 schema / DISPATCH：`tools/contract_check.py` + `tools/_rpc_test.py`。
