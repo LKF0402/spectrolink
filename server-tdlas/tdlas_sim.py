@@ -754,6 +754,11 @@ def plot_das_td(r, out_png):
 
 # ══════════════════ 8. 仪器系统链路（DAQ 电压 → 激光 → 光路 → PD → ADC）══════════════════
 
+# 自适应 m 的进程内缓存：同一谱线/工况下重复出图时，自适应扫描（18 次完整锁相）
+# 是主要耗时之一；弱吸收区（αL≤0.02）最优 m 与浓度无关，可安全复用。
+# 高浓度/混合气不缓存，避免把饱和非线性带进下一次结果。
+_ADAPTIVE_M_CACHE = {}
+
 # 内置默认参数：常见 16-bit USB DAQ + 典型中红外 DFB 激光器 + CH4 @2968.5 cm⁻¹ 场景。
 # 参数缺省时的索取优先级：① 用户给实测值 → ② 用户给器件型号（由 AI 检索规格书）
 # → ③ 用户现场标定（如"电压变化 ΔV → 波数变化 Δν"）→ ④ 用下列默认值并明确标注。
@@ -1806,12 +1811,43 @@ def simulate_wms_instrument(species=GAS_DEFAULTS["species"], wn_center=GAS_DEFAU
     auto_mod = cfg["mod_amp_V"] is None
     m_opt_raw = cfg.get("m_opt", 2.2)
     _auto_m = str(m_opt_raw).strip().lower() == "auto"
-    if auto_mod and _auto_m:
+    _adaptive_key = None
+    if auto_mod and _auto_m and mixture is None:
+        _hwhm_k = estimate_hwhm(nu_grid, alpha_pure)
+        _adaptive_key = (
+            str(species).upper(), round(float(wn_center), 6), round(float(T), 3),
+            round(float(P), 6), round(float(L_cm), 6), round(float(x), 12),
+            hash(alpha_pure.tobytes()), round(float(_hwhm_k), 10),
+            int(info["n_lines_in_window"]),
+            round(float(cfg["fs"]), 6), int(cfg["n_samples"]), round(float(cfg["freq_Hz"]), 6),
+            round(float(cfg["amp_V"]), 9), round(float(cfg["offset_V"]), 9),
+            round(float(cfg["phase_deg"]), 6), round(float(cfg["mod_freq_Hz"]), 6),
+            round(float(cfg["mod_phase_deg"]), 6), round(float(cfg["eta_VI"]), 9),
+            round(float(cfg["dnu_dI"]), 12), round(float(cfg["wn_ref"]), 9),
+            round(float(cfg["i_ref"]), 9), round(float(cfg["i_th"]), 9),
+            round(float(cfg["eta_IP"]), 9), round(float(cfg.get("d2nu_dI2", 0.0)), 12),
+            round(float(cfg["bw"]), 6), round(float(cfg["throughput"]), 9),
+            round(float(cfg["resp"]), 9), round(float(cfg["gain"]), 9),
+            round(float(cfg["v_range"]), 9), int(cfg["adc_bits"]),
+            int(cfg["lockin_avg"]), int(cfg["lockin_stages"]),
+            str(cfg.get("lock_kind", "boxcar")), bool(cfg.get("zero_phase", False)),
+            round(float(cfg["trim_frac"]), 6), str(cfg.get("edge") or "rising"),
+            )
+    if _adaptive_key is not None and _adaptive_key in _ADAPTIVE_M_CACHE:
+        m_act, a_cm1, hwhm, mod_info = _ADAPTIVE_M_CACHE[_adaptive_key]
+        mod_info = dict(mod_info)
+        mod_info["cache_hit"] = True
+    elif auto_mod and _auto_m:
         # 自适应：扫描选最优 m（A 解析 + D 模型 + B 完整链路扫描）
         m_act, a_cm1, hwhm, mod_info = adaptive_modulation_index(
             nu_grid, alpha_pure, estimate_hwhm(nu_grid, alpha_pure),
             cfg, t, v_scan, v_mod_sig, _xscale, float(L_cm),
             n_lines=info["n_lines_in_window"])
+        if _adaptive_key is not None:
+            if len(_ADAPTIVE_M_CACHE) >= 8:
+                _ADAPTIVE_M_CACHE.pop(next(iter(_ADAPTIVE_M_CACHE)))
+            _ADAPTIVE_M_CACHE[_adaptive_key] = (m_act, a_cm1, hwhm, dict(mod_info))
+    if auto_mod and _auto_m:
         _dnu_dV = abs(float(cfg["eta_VI"]) * float(cfg["dnu_dI"]))
         mod_amp_V = a_cm1 / _dnu_dV if _dnu_dV > 0 else 0.0
     elif auto_mod:

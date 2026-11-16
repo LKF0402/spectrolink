@@ -109,41 +109,69 @@ def _table_file(table, directory):
     return Path(directory) / f"{table}.data"
 
 
-def _sync_table(table):
-    """把其它缓存目录中已存在的线表按需复制到 HAPI 当前激活目录。
+def _copy_table_to_primary(table):
+    """把其它缓存目录中的 `<table>.data` / `.header` 补进 HAPI 当前目录。
 
-    这是“多目录回退”的落地方式，而不是把 `_DATA_DIR` 改成列表就结束：
-    HAPI 的 `tableList/getColumn/fetch` 都绑定当前 DATABASE_DIR，若只改列表，
-    会出现“索引查到表、HAPI 读不到”的假修复。复制是幂等的；同名表已存在则不覆盖。
+    返回 True/False 表示是否有复制；复制失败返回 None。`.data` 与 `.header` 必须
+    分别检查：旧缓存可能只有 `.data` 没有 `.header`，而 HAPI 1.x 的 `tableList()`
+    依赖 `.header` 建立的索引；只看到 `.data` 就返回会让表永远不可见。
     """
     target = _table_file(table, _DATA_DIR)
-    if target.exists():
-        return target
+    target_hdr = target.parent / f"{table}.header"
+    copied = False
     for d in _DATA_DIRS:
         if Path(d) == Path(_DATA_DIR):
             continue
         src = _table_file(table, d)
-        if not src.exists():
-            continue
-        try:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, target)
-            # HAPI 以 `<table>.header` 建立表索引；只复制 .data 会出现
-            # “文件已复制、tableList 仍为空”的假修复，必须连 header 一起复制。
-            hdr = Path(d) / f"{table}.header"
-            if hdr.exists():
-                shutil.copy2(hdr, target.parent / f"{table}.header")
-            # HAPI 1.x 的 getTableList() 读的是 db_begin 时建立的 LOCAL_TABLE_CACHE；
-            # 复制后必须重新 db_begin，否则新表不会进入索引。
+        if not target.exists() and src.exists():
             try:
-                _db_begin_quiet(_DATA_DIR)
-            except (AttributeError, OSError, ValueError, TypeError):
-                pass
-            return target
-        except OSError:
-            # 目标目录不可写 / 文件被占用：保持原状，让上层走联网或明确报错
-            return None
-    return None
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, target)
+                copied = True
+            except OSError:
+                return None
+        hdr = Path(d) / f"{table}.header"
+        if hdr.exists() and not target_hdr.exists():
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(hdr, target_hdr)
+                copied = True
+            except OSError:
+                return None
+    return copied
+
+
+def _sync_table(table):
+    """单表同步：复制缺失文件，必要时重建 HAPI 索引。"""
+    target = _table_file(table, _DATA_DIR)
+    changed = _copy_table_to_primary(table)
+    if changed is None:
+        return None
+    if changed:
+        # HAPI 1.x 的 getTableList() 读的是 db_begin 时建立的 LOCAL_TABLE_CACHE；
+        # 复制后必须重新 db_begin，否则新表不会进入索引。
+        try:
+            _db_begin_quiet(_DATA_DIR)
+        except (AttributeError, OSError, ValueError, TypeError):
+            pass
+    return target
+
+
+def _sync_tables(tables):
+    """批量同步多张表，只在最后重建一次 HAPI 索引。
+
+    `_loaded_covering` / `_cached_windows` 会遍历多个候选表；若逐表 `_sync_table`，
+    每次复制都触发一次 `db_begin`（本机实测约 1.4 s），20 张表就是 20 多次全量扫描，
+    出图会从秒级退化到几十秒。这里把复制与重建索引拆开，索引只建一次。
+    """
+    changed = False
+    for table in tables:
+        changed = (_copy_table_to_primary(table) is True) or changed
+    if changed:
+        try:
+            _db_begin_quiet(_DATA_DIR)
+        except (AttributeError, OSError, ValueError, TypeError):
+            pass
 
 
 def _table_names():
@@ -267,10 +295,14 @@ def _isotope_known(M, I):
         return None
 
 
-def _coverage(table):
-    """已加载表的覆盖区间 (nu_min, nu_max, n_lines)；未加载返回 None。"""
+def _coverage(table, sync=True):
+    """已加载表的覆盖区间 (nu_min, nu_max, n_lines)；未加载返回 None。
+
+    sync=False 用于批量同步后只读索引，避免逐表触发 `db_begin`。
+    """
     h = _hapi()
-    _sync_table(table)                 # 其它缓存目录有表 → 先同步到 HAPI 当前目录
+    if sync:
+        _sync_table(table)                 # 其它缓存目录有表 → 先同步到 HAPI 当前目录
     try:
         if table not in h.tableList():
             return None
@@ -286,11 +318,12 @@ def _cached_windows(formula, M, I, limit=8):
     用途：联网失败时告诉调用方“本地还有什么能用”，避免 AI 盲试窗口。
     """
     prefix = f"{formula}_{M}_{I}_"
+    candidates = [t for t in _table_names()
+                  if t == f"{formula}_{M}_{I}" or t.startswith(prefix)]
+    _sync_tables(candidates)
     wins = []
-    for t in _table_names():
-        if not (t == f"{formula}_{M}_{I}" or t.startswith(prefix)):
-            continue
-        cov = _coverage(t)
+    for t in candidates:
+        cov = _coverage(t, sync=False)
         if cov:
             wins.append((cov[0], cov[1]))
     wins.sort()
@@ -319,11 +352,12 @@ def _loaded_covering(base, numin, numax):
         names = _table_names() or set(h.tableList())
     except (AttributeError, OSError, ValueError, TypeError):   # 本地索引还没建起来 → 无表可复用
         names = _table_names()
+    candidates = [t for t in sorted(names)
+                  if t == base or t.startswith(base + "_")]   # 只认同分子/同位素，避免跨物种误用
+    _sync_tables(candidates)                                   # 批量复制，只重建一次索引
     best = None
-    for t in sorted(names):
-        if t != base and not t.startswith(base + "_"):
-            continue                       # 只认同分子/同位素，避免跨物种误用
-        cov = _coverage(t)
+    for t in candidates:
+        cov = _coverage(t, sync=False)
         if not cov or cov[0] > numin or cov[1] < numax:
             continue
         if best is None or cov[2] < best[1][2]:
