@@ -54,7 +54,7 @@ description: SpectroLink 子服务器 server-tdlas（L2 参考，AI 自动读取
 `clarify.needed=true` → **必须先询问，得到回答前不得绘图**。
 用户指定“使用默认值”时可跳过。
 
-**参数名以工具 schema 为准**：不同工具参数名不同（如 `tdlas_simulate` 用 `wn0`/`L`，`tdlas_wms_instrument` 用 `wn_center`/`scan_span_cm`/`L_cm`）。本 server 对未声明参数**严格拒绝**（防止拼写错误），调用前先查工具 schema，禁止依据旧工具习惯传参。
+**参数名以工具 schema 为准**：不同工具参数名不同（如 `tdlas_simulate` 用 `wn0`/`L_cm`（`L` 兼容别名），`tdlas_wms_instrument` 用 `wn_center`/`scan_span_cm`/`L_cm`）。本 server 对未声明参数**严格拒绝**（防止拼写错误），调用前先查工具 schema，禁止依据旧工具习惯传参。
 
 ## C. 绘图规范（硬约束）
 

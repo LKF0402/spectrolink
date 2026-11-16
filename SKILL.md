@@ -57,7 +57,7 @@ description: SpectroLink —— 多技术光谱传感仿真 MCP 总入口。触�
 
 - 共用 `spectrolink_core`（HITRAN 线表/吸收谱 + 数字锁相基座 `lockin`），本地缓存 `Hitran_Data/`；首次下载耗时较长，缓存后效率较高。
 - 抓取窗比计算窗外扩（`fetch_margin`）：线表按窗边多抓 ΩWingHW·Γ 的翼宽，否则窗外线翼被静默丢弃（窗缘可低 2% 量级）。
-- 缓存目录优先级：环境变量 `SPECTROLINK_DATA_DIR` > `~/.spectrolink/Hitran_Data` > 仓库内。
+- 缓存目录优先级：环境变量 `SPECTROLINK_DATA_DIR`（可用系统路径分隔符给多个目录）> `~/.spectrolink/Hitran_Data` > 仓库内。HAPI 1.x 只激活一个写入目录；其余目录中已存在的线表会在首次命中时按需复制过来，避免“本地有表却联网重抓”。
 - 多气体混合：`spectrolink_core.hitran.absorption_mixture()` 自动插值到统一波数网格。
 - 横轴口径：TDLAS/CRDS/FTIR 用**波数 cm⁻¹**；DOAS 用**波长 nm**（勿混）。
 

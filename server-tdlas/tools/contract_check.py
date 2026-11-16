@@ -136,6 +136,39 @@ print(f"  工具数 = {len(M.TOOLS)} / DISPATCH 数 = {len(M.DISPATCH)}")
 check("TOOLS 与 DISPATCH 双向一致",
       {t["name"] for t in M.TOOLS} == set(M.DISPATCH))
 
+# ───────────────── 1b. schema 文案里的默认值（防 P/L 漂移）─────────────────
+# 历史事故：schema 写 P=1.0 / L=30，实际运行默认 P=1.01325、L 按物种 30–100。
+# AI 读 schema 选参数，结果与仿真器内部默认不一致，且 193 项契约检查全绿。
+print("=== 1b. schema 文案默认值 ===")
+_PROPS = {t["name"]: (t["inputSchema"].get("properties") or {}) for t in M.TOOLS}
+
+
+def _desc_num(tool, key):
+    d = str((_PROPS.get(tool) or {}).get(key, {}).get("description", ""))
+    m = re.search(r"(?:默认|缺省)[^0-9]{0,16}([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)", d, re.I)
+    return float(m.group(1)) if m else None
+
+
+def _desc(tool, key):
+    return str((_PROPS.get(tool) or {}).get(key, {}).get("description", ""))
+
+
+for _tool, _key, _want in (
+        ("tdlas_simulate", "P", M._SCENE_DEFAULTS["P"]),
+        ("tdlas_das_chain", "P", 1.01325),
+        ("tdlas_das_chain", "L", 50.0),
+        ("tdlas_das_instrument", "P", 1.01325),
+        ("tdlas_das_instrument", "L_cm", 50.0),
+        ("tdlas_wms_instrument", "L_cm", 50.0)):
+    _got = _desc_num(_tool, _key)
+    check(f"{_tool}.{_key} 文案默认值=运行默认", _got is not None and abs(_got - _want) < 1e-12,
+          f"文案={_got} / 运行={_want}")
+
+check("tdlas_simulate.L 文案声明按物种推荐（不写死单一数值）",
+      "按物种推荐" in _desc("tdlas_simulate", "L") and "cm" in _desc("tdlas_simulate", "L"),
+      f"-> {_desc('tdlas_simulate', 'L')[:80]}")
+
+
 # ───────────────────── 2. 参数真的透传到引擎 ─────────────────────
 print("=== 2. WMS 参数透传（含曾静默丢弃的一族）===")
 _want_wms = ["edge", "trim_frac", "d2nu_dI2", "am_i0", "am_i2", "am_psi1", "am_psi2",

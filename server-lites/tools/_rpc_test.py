@@ -9,7 +9,7 @@ JSON-RPC 解包 → 校验 → 派发 → 序列化之后坏掉"这类问题 —
 本脚本是唯一的**端到端**门禁。
 
 覆盖：
-  · 正向 13 条：initialize / tools/list / ping，以及全部 12 个工具各调一次
+  · 正向 14 条：initialize / tools/list / ping，以及全部 13 个工具各调一次
   · 负向  4 条：未知工具名 / 未声明参数 / 缺必填参数 / 未知方法
     —— 四类都必须被**正确拒绝**，而不是静默返回默认值算出的结果
 
@@ -57,6 +57,8 @@ REQS = [
      "params": {"name": "lites_compare", "arguments": {}}},
     {"jsonrpc": "2.0", "id": 13, "method": "tools/call",
      "params": {"name": "lites_review", "arguments": {"f_m": 50000.0}}},
+    {"jsonrpc": "2.0", "id": 14, "method": "tools/call",
+     "params": {"name": "lites_calibfree", "arguments": {"mode": "guide"}}},
     # ── 负例：四类都必须被拒绝 ──
     # ⚠ 别把这里的工具名改成真实存在的工具。曾经被一次批量改名脚本
     #   把 `tdlas_simulate`（真·未知工具）改成 `lites_forward`（真实工具），
@@ -80,11 +82,12 @@ EXPECT = {
     92: ("isError", "缺少必填"),
     93: ("error", "未知方法"),
 }
-#: 正向必须调通的 12 个工具（id → 工具名）
+#: 正向必须调通的 13 个工具（id → 工具名）
 POSITIVE_TOOLS = {4: "lites_forward", 5: "lites_mdl", 6: "lites_invert",
                   7: "lites_guide", 8: "lites_sweep", 9: "lites_resonance",
                   10: "lites_device", 11: "lites_noise_budget",
-                  12: "lites_compare", 13: "lites_review"}
+                  12: "lites_compare", 13: "lites_review",
+                  14: "lites_calibfree"}
 
 
 def _find_nonfinite(obj, path=""):
@@ -107,6 +110,15 @@ def _find_nonfinite(obj, path=""):
     return bad
 
 
+def _reject_constant(value):
+    raise ValueError(f"非法 JSON 常量: {value}")
+
+
+def _strict_loads(text):
+    """严格 JSON 解析：裸 NaN/Infinity 在词法阶段直接拒绝。"""
+    return json.loads(text, parse_constant=_reject_constant)
+
+
 def main() -> int:
     inp = "\n".join(json.dumps(r, ensure_ascii=False) for r in REQS) + "\n"
     p = subprocess.run([PY, "-W", "ignore", SCRIPT], input=inp,
@@ -120,7 +132,7 @@ def main() -> int:
     bad_stdout = []
     for l in lines:
         try:
-            o = json.loads(l)
+            o = _strict_loads(l)
         except Exception:
             bad_stdout.append(l)
             continue
@@ -147,8 +159,8 @@ def main() -> int:
                 got = len(res["tools"])
                 names = {t["name"] for t in res["tools"]}
                 print(f"  id={rid:3d}  tools/list -> {got} tools")
-                if got != 12:
-                    print(f"  !! tools/list 应返回 12 个工具，实得 {got}"); ok = False
+                if got != 13:
+                    print(f"  !! tools/list 应返回 13 个工具，实得 {got}"); ok = False
                 sys.stdout.flush()
                 byid["__names__"] = names
                 continue
@@ -158,7 +170,7 @@ def main() -> int:
                 tag = f"[{kind}]"
                 print(f"  id={rid:3d}  {tag} {txt[:80]}")
                 try:
-                    parsed = res.get("structuredContent") or json.loads(txt)
+                    parsed = res.get("structuredContent") or _strict_loads(txt)
                 except Exception:
                     parsed = None
             else:
@@ -192,8 +204,8 @@ def main() -> int:
     stale = sorted(n for n in names if n.startswith("tdlas"))
     if stale:
         print(f"  !! tools/list 含 TDLAS 遗留工具名: {stale}"); ok = False
-    if len(names) != 12:
-        print(f"  !! 工具数应为 12，实得 {len(names)}"); ok = False
+    if len(names) != 13:
+        print(f"  !! 工具数应为 13，实得 {len(names)}"); ok = False
 
     print()
     if ok:

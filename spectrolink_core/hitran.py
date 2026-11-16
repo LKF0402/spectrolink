@@ -16,7 +16,10 @@ HAPI 1.x 精简封装（自包含，不依赖外部仓库）。
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import os
+import shutil
 import threading
 import time
 import warnings
@@ -24,9 +27,28 @@ from pathlib import Path
 
 import numpy as np
 
-# 缓存目录优先级：环境变量 SPECTROLINK_DATA_DIR > 用户目录 ~/.spectrolink/Hitran_Data > 仓库内
+# 缓存目录优先级：环境变量 SPECTROLINK_DATA_DIR（可用 os.pathsep 给多个）>
+# 用户目录 ~/.spectrolink/Hitran_Data > 仓库内 Hitran_Data。
+# 为什么不是单值：用户可能已有两份缓存（例如 HOME 里是旧窗口、仓库里是新窗口）。
+# 只认第一个目录会让“本地明明有表”的窗口去联网重抓，甚至撞上 HITRAN 每日配额。
 _DEFAULT_DATA_DIR = Path.home() / ".spectrolink" / "Hitran_Data"
-_DATA_DIR = Path(os.environ.get("SPECTROLINK_DATA_DIR", str(_DEFAULT_DATA_DIR)))
+_REPO_DATA_DIR = Path(__file__).resolve().parent.parent / "Hitran_Data"
+
+
+def _initial_data_dirs():
+    env = os.environ.get("SPECTROLINK_DATA_DIR", "")
+    dirs = []
+    for part in env.split(os.pathsep):
+        if part.strip():
+            dirs.append(Path(part).expanduser())
+    for d in (_DEFAULT_DATA_DIR, _REPO_DATA_DIR):
+        if d not in dirs:
+            dirs.append(d)
+    return dirs
+
+
+_DATA_DIRS = _initial_data_dirs()
+_DATA_DIR = _DATA_DIRS[0]
 _DB_READY = False
 _SPECIES = None
 
@@ -38,7 +60,8 @@ def _hapi():
     常见误用是用别的解释器跑（如 windows 商店占位符 python），报错现场离根因很远。
     """
     try:
-        import hapi
+        with contextlib.redirect_stdout(io.StringIO()):
+            import hapi
     except ImportError as exc:          # 依赖缺失：直接说清装什么、用哪个解释器
         import sys
         raise ImportError(
@@ -48,9 +71,24 @@ def _hapi():
     return hapi
 
 
+def _db_begin_quiet(directory):
+    """调用 HAPI db_begin，并吞掉它打印到 stdout 的目录/表清单。
+
+    为什么必须吞：MCP 走 stdio JSON-RPC，stdout 只能是协议行。HAPI 的
+    `db_begin` 会 print("Using ...") 并逐表打印，若在 tools/call 期间触发，
+    会把整条协议流污染成“非 JSON 行”。
+    """
+    with contextlib.redirect_stdout(io.StringIO()):
+        _hapi().db_begin(str(directory))
+
+
 def _ensure_db():
-    """初始化 HAPI 线表缓存目录（进程内一次）。"""
-    global _DB_READY, _DATA_DIR
+    """初始化 HAPI 线表缓存目录（进程内一次）。
+
+    HAPI 1.x 的 `db_begin` 只激活一个 DATABASE_DIR；因此这里选第一个**可写**目录作为
+    写入主目录，其余目录仅作为只读缓存来源（见 `_sync_table` 的按需复制）。
+    """
+    global _DB_READY, _DATA_DIR, _DATA_DIRS
     if not _DB_READY:
         _DATA_DIR = Path(_DATA_DIR)  # 兼容字符串传入
         # 尝试建目录，失败就 fallback 到仓库内（兼容旧安装）
@@ -58,10 +96,66 @@ def _ensure_db():
             _DATA_DIR.mkdir(parents=True, exist_ok=True)
         except (PermissionError, OSError):
             # 用户目录不可写 → 用仓库内 Hitran_Data
-            _DATA_DIR = Path(__file__).resolve().parent.parent / "Hitran_Data"
+            _DATA_DIR = _REPO_DATA_DIR
             _DATA_DIR.mkdir(parents=True, exist_ok=True)
-        _hapi().db_begin(str(_DATA_DIR))
+        if _DATA_DIR not in _DATA_DIRS:
+            _DATA_DIRS.insert(0, _DATA_DIR)
+        _db_begin_quiet(_DATA_DIR)
         _DB_READY = True
+
+
+def _table_file(table, directory):
+    """某目录下的线表数据文件（HAPI 以 `<table>.data` 落盘）。"""
+    return Path(directory) / f"{table}.data"
+
+
+def _sync_table(table):
+    """把其它缓存目录中已存在的线表按需复制到 HAPI 当前激活目录。
+
+    这是“多目录回退”的落地方式，而不是把 `_DATA_DIR` 改成列表就结束：
+    HAPI 的 `tableList/getColumn/fetch` 都绑定当前 DATABASE_DIR，若只改列表，
+    会出现“索引查到表、HAPI 读不到”的假修复。复制是幂等的；同名表已存在则不覆盖。
+    """
+    target = _table_file(table, _DATA_DIR)
+    if target.exists():
+        return target
+    for d in _DATA_DIRS:
+        if Path(d) == Path(_DATA_DIR):
+            continue
+        src = _table_file(table, d)
+        if not src.exists():
+            continue
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, target)
+            # HAPI 以 `<table>.header` 建立表索引；只复制 .data 会出现
+            # “文件已复制、tableList 仍为空”的假修复，必须连 header 一起复制。
+            hdr = Path(d) / f"{table}.header"
+            if hdr.exists():
+                shutil.copy2(hdr, target.parent / f"{table}.header")
+            # HAPI 1.x 的 getTableList() 读的是 db_begin 时建立的 LOCAL_TABLE_CACHE；
+            # 复制后必须重新 db_begin，否则新表不会进入索引。
+            try:
+                _db_begin_quiet(_DATA_DIR)
+            except (AttributeError, OSError, ValueError, TypeError):
+                pass
+            return target
+        except OSError:
+            # 目标目录不可写 / 文件被占用：保持原状，让上层走联网或明确报错
+            return None
+    return None
+
+
+def _table_names():
+    """所有缓存目录里的线表名（跨目录，避免只看 HAPI 当前目录）。"""
+    names = set()
+    for d in _DATA_DIRS:
+        try:
+            names.update(p.stem for p in Path(d).glob("*.data"))
+        except OSError:
+            continue
+    return names
+
 
 
 def _species_index():
@@ -176,6 +270,7 @@ def _isotope_known(M, I):
 def _coverage(table):
     """已加载表的覆盖区间 (nu_min, nu_max, n_lines)；未加载返回 None。"""
     h = _hapi()
+    _sync_table(table)                 # 其它缓存目录有表 → 先同步到 HAPI 当前目录
     try:
         if table not in h.tableList():
             return None
@@ -183,6 +278,33 @@ def _coverage(table):
         return (float(nu.min()), float(nu.max()), int(nu.size)) if nu.size else None
     except (AttributeError, KeyError, TypeError, ValueError, IndexError, OSError):   # 表不可读 → None
         return None
+
+
+def _cached_windows(formula, M, I, limit=8):
+    """本地缓存中该分子/同位素的可用覆盖窗口（按下限排序，最多 limit 段）。
+
+    用途：联网失败时告诉调用方“本地还有什么能用”，避免 AI 盲试窗口。
+    """
+    prefix = f"{formula}_{M}_{I}_"
+    wins = []
+    for t in _table_names():
+        if not (t == f"{formula}_{M}_{I}" or t.startswith(prefix)):
+            continue
+        cov = _coverage(t)
+        if cov:
+            wins.append((cov[0], cov[1]))
+    wins.sort()
+    merged = []
+    for lo, hi in wins:
+        if merged and lo <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], hi))
+        else:
+            merged.append((lo, hi))
+    return merged[:limit]
+
+
+def _fmt_windows(wins):
+    return ", ".join(f"{lo:.4g}–{hi:.4g}" for lo, hi in wins)
 
 
 def _loaded_covering(base, numin, numax):
@@ -194,11 +316,11 @@ def _loaded_covering(base, numin, numax):
     """
     h = _hapi()
     try:
-        names = h.tableList()
+        names = _table_names() or set(h.tableList())
     except (AttributeError, OSError, ValueError, TypeError):   # 本地索引还没建起来 → 无表可复用
-        return None
+        names = _table_names()
     best = None
-    for t in names:
+    for t in sorted(names):
         if t != base and not t.startswith(base + "_"):
             continue                       # 只认同分子/同位素，避免跨物种误用
         cov = _coverage(t)
@@ -246,6 +368,9 @@ def fetch_table(formula, M, I, numin, numax, force=False):
         #   此前把四种原因并列成一段话，一次 502 会被读成"HITRAN 没收录这条线"，
         #   用户据此换波段甚至得出"该气体无吸收"——这正是本模块开头纪律要避免的静默错误。
         known = _isotope_known(M, I)
+        cached = _cached_windows(formula, M, I)
+        cache_hint = (f" 本地已缓存可用窗口：{_fmt_windows(cached)}。" if cached
+                      else " 本地暂无该分子/同位素的缓存窗口。")
         # 优先用**离线索引**下判断（比关键字更可靠）：同位素确实收录 ⇒ 失败必是服务端/网络问题。
         if known is False:
             raise RuntimeError(
@@ -258,7 +383,9 @@ def fetch_table(formula, M, I, numin, numax, force=False):
                 f"已自动重试 {_FETCH_TRIES} 次仍失败。"
                 + (f"{formula}(M={M}, I={I}) 是 HITRAN 收录的同位素，"
                    f"失败属网络/服务端故障。" if known else "")
-                + "**这不代表该窗口无谱线** —— 请稍后重试，不要据此换波段或判定该气体无吸收。"
+                + cache_hint
+                + " **这不代表该窗口无谱线** —— 请稍后重试，或改用上述本地已缓存窗口；"
+                  "不要据此判定该气体无吸收。"
             ) from last
         raise RuntimeError(
             f"[spectrolink] 抓取 {formula}(M={M}, I={I}) 于 {numin}-{numax} cm-1 失败：{last}。"

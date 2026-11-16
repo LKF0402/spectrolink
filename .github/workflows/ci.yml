@@ -50,11 +50,11 @@ jobs:
     #   后面的检查全部没跑，而 CI 依然显示"绿"（实测只跑到 80 项就断了）。
     #   脚本自身已改为遇环境限制记 SKIP 而非中断；这里再加一道：通过数低于下限即说明
     #   有检查被静默吞掉（新节没跑到 / 提前 return / 异常被吞），必须变红。
-    #   维护：新增检查后把下限同步抬高（当前实测 138 通过 / 2 跳过）。
+    #   维护：新增检查后把下限同步抬高（当前实测 200 通过 / 0 跳过）。
     - name: TDLAS contract check (offline)
       shell: pwsh
       run: |
-        $MIN_PASS = 130
+        $MIN_PASS = 197
         Push-Location server-tdlas
         $out = python -X utf8 tools/contract_check.py
         $code = $LASTEXITCODE
@@ -110,6 +110,22 @@ jobs:
         python -X utf8 tools/lites_mcp.py --selftest
         if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Error "server-lites selftest 失败"; exit 1 }
         Pop-Location
+
+    # MCP 协议层冒烟（离线、硬门禁）：真的启动 stdio 子进程走 initialize / tools/list /
+    # tools/call，并严格解析 JSON（裸 NaN/Infinity 在词法阶段就拒绝）。数值自检与契约检查
+    # 都发现不了“解包→校验→派发→序列化”这一段坏掉；此前 lites 有脚本但 CI 从未执行。
+    - name: MCP JSON-RPC smoke (offline, hard gate)
+      shell: pwsh
+      run: |
+        $servers = @("server-lites", "server-tdlas")
+        foreach ($s in $servers) {
+          Write-Host "=== $s / _rpc_test.py ==="
+          Push-Location $s
+          python -X utf8 tools/_rpc_test.py
+          $code = $LASTEXITCODE
+          Pop-Location
+          if ($code -ne 0) { Write-Error "$s JSON-RPC smoke 失败"; exit 1 }
+        }
 
     # TDLAS 全链路自检需要访问 hitran.org，偶发网络/服务端抖动（代码内已带 3 次指数退避重试）；
     # 因此不作为硬门禁，但失败会在日志里明确记录，便于区分"代码坏了"与"HITRAN 抖了"。

@@ -1573,7 +1573,13 @@ def simulate_das_instrument(species=GAS_DEFAULTS["species"], wn_center=GAS_DEFAU
             "span_cm-1": span, "scan_lo": float(nu_laser.min()),
             "scan_hi": float(nu_laser.max()), "alpha_L_peak": aL_peak,
             "baseline_fallback": baseline_fallback,
-            "v_pd_mean": float(np.mean(v_pd)), "lsb_V": lsb, "n_sat": n_sat,
+            # v_pd_mean 是历史字段（理想 PD 电压均值，未裁剪）；饱和时它会高于 ADC 量程，
+            # 与 v_adc 的封顶值矛盾。新增两个显式字段，避免把“理想值”当成“实际采集值”。
+            "v_pd_mean": float(np.mean(v_pd)),
+            "v_pd_ideal_mean": float(np.mean(v_pd)),
+            "v_pd_adc_mean": float(np.mean(v_adc)),
+            "v_pd_saturated": bool(n_sat > 0),
+            "lsb_V": lsb, "n_sat": n_sat,
             "sigma_v_noise": v_noise_rms, "sigma_shot": s_shot * cfg["gain"],
             "sigma_thermal": s_therm * cfg["gain"], "sigma_rin": s_rin * cfg["gain"],
             "physical_noise": bool(cfg.get("physical_noise", True)), "seed_used": seed,

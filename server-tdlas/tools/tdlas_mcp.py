@@ -450,6 +450,18 @@ def _interaction_block(out, tool, session_id="default"):
 #: 无意义的名字（单字符、纯编号、通用词）——直接拒绝
 
 
+def _resolve_L_alias(L, L_cm):
+    """兼容旧参数名 L 与推荐参数名 L_cm（单位均为 cm）。
+
+    为什么保留别名：历史上 tdlas_simulate/tdlas_das_chain 用 L，仪器链用 L_cm；
+    调用方按 L=0.1 以为是 0.1 m 时会被当成 0.1 cm。统一到 L_cm 需要过渡期，
+    两者同时给出且数值不同则明确报错，避免静默择一。
+    """
+    if L is not None and L_cm is not None and float(L) != float(L_cm):
+        raise ValueError(f"L 与 L_cm 同时给出但数值不同（L={L}, L_cm={L_cm}）；二者同义，请只保留 L_cm")
+    return L_cm if L_cm is not None else L
+
+
 def _resolve_conditions(T, P, x, L_cm, session_id="default", x_default=1e-3, L_default=50.0):
     """工况参数优先级：本次显式给 > 会话已确认 > 默认。
 
@@ -773,13 +785,14 @@ def t_simulate(species="H2O", wn0=7185.596, T=None, P=None, x=None, L=None,
                span=0.8, n_scan=401, n_mod=96, sigma_tau=0.0, seed=None,
                save_png=False, session_id="default", x_list=None, mixture=None,
 
-               iso=None):
+               iso=None, L_cm=None):
     """DAS + 免标定 WMS 正向仿真：返回 1f、2f 峰高、DAS 最小透过率、线表信息。
 
     wn0 为目标线中心（cm^-1）；x 为摩尔分数（默认 1e-3 = 1000 ppm，弱吸收）；L 为光程 cm；
     a 为调制深度 cm^-1。sigma_tau 为等效透过率噪声（默认 0=理想无噪）。save_png=True 时绘图。
     T/P/x/L 未给出时按「会话已确认 > 默认」取值（复用 tdlas_session 已确认的工况）。
     """
+    L = _resolve_L_alias(L, L_cm)
     if mixture is not None and x_list is not None:
         raise ValueError("mixture（混合气多组分）与 x_list（单物种多浓度）不能同时使用，请二选一")
     _xd, _Ld = _species_defaults(species)
@@ -1146,13 +1159,15 @@ def t_detection_limit_scan(species="CH4", wn0=2968.5, T=296.0, P=1.01325, a=0.10
 def t_das_chain(species="H2O", wn0=7185.596, T=None, P=None, x=None, L=None,
                 span=None, fscan=None, fs=None, baseline_slope=None,
                 sigma=0.0, seed=None, fit_order=None, fit_frac=None,
-                edge=None, save_png=False, x_list=None, mixture=None, iso=None):
+                edge=None, save_png=False, x_list=None, mixture=None, iso=None,
+                L_cm=None):
     """三角波扫描 DAS 全链路：PD 原始信号 → 多项式基线拟合扣除 → DAS 吸光度信号。
 
     默认工况（未显式给出时使用，并列入 assumptions 供复核）：
         **1000 ppm（x=1e-3）、0.5 m 光程（L=50 cm）、296 K、1 atm、上升沿（edge="rising"）**。
     技术知识见返回中的 edge_note（上升/下降沿为何不重合、如何取舍）。
     """
+    L = _resolve_L_alias(L, L_cm)
     if mixture is not None and x_list is not None:
         raise ValueError("mixture（混合气多组分）与 x_list（单物种多浓度）不能同时使用，请二选一")
     _DEF = {"T": 296.0, "P": 1.01325, "x": 1e-3, "L": 50.0, "span": 0.8,
@@ -2815,7 +2830,7 @@ TOOLS = [
                          "species": {"type": "string", "description": "分子式，如 H2O / CO2 / CO"},
                          "wn0": {"type": "number", "description": "目标线中心 cm^-1"},
                          "T": {"type": "number", "description": "温度 K；缺省=会话已确认或 296"},
-                         "P": {"type": "number", "description": "气压 atm；缺省=会话已确认或 1.0"},
+                         "P": {"type": "number", "description": f"气压 atm；缺省=会话已确认或 {_SCENE_DEFAULTS['P']:g}"},
                          "x": {"type": "number", "description": "摩尔分数 (0,1]；缺省=会话已确认或按物种推荐（强吸收如 CH4≈1e-4）"},
                          "x_list": {"type": "array", "items": {"type": "number"},
                                     "description": "多浓度扫描：摩尔分数列表 (0,1]，如 [1e-4,1e-3,1e-2]，与 x 二选一；"
@@ -2824,7 +2839,8 @@ TOOLS = [
                                                    "防呆：空/越界/超 64 点会被拒绝，自动去重并升序；也接受 '1e-4,1e-3' 字符串。"
                                                    "save_png=true 时额外输出 png_overlay（多浓度同图，兼容性操作，用于混合气/标定对照）。"},
                          "mixture": _MIXTURE_PROP,
-                         "L": {"type": "number", "description": "光程 cm；缺省=会话已确认或 30"},
+                         "L": {"type": "number", "description": "光程 cm（兼容旧名；推荐用 L_cm。注意单位是 cm，不是 m）；缺省=会话已确认，否则按物种推荐（CH4 100 / CO2 30 / H2O 50）"},
+                         "L_cm": {"type": "number", "description": "光程 cm（推荐；与 L 同义，二选一。注意单位是 cm，不是 m）；缺省=会话已确认，否则按物种推荐"},
                          "session_id": {"type": "string", "description": "会话标识，默认 default（复用 tdlas_session 已确认工况）"},
                          "a": {"type": "number", "description": "调制深度 cm^-1，默认 0.1"},
                          "i0": {"type": "number"}, "i2": {"type": "number"},
@@ -2856,7 +2872,8 @@ TOOLS = [
                                                    "防呆：空/越界/超 64 点会被拒绝，自动去重并升序；也接受 '1e-4,1e-3' 字符串。"
                                                    "save_png=true 时额外输出 png_overlay（多浓度同图，兼容性操作，用于混合气/标定对照）。"},
                          "mixture": _MIXTURE_PROP,
-                         "L": {"type": "number", "description": "光程 cm，默认 50（0.5 m）"},
+                         "L": {"type": "number", "description": "光程 cm（兼容旧名；推荐用 L_cm。注意单位是 cm，不是 m）；默认 50（0.5 m）"},
+                         "L_cm": {"type": "number", "description": "光程 cm（推荐；与 L 同义，二选一）；默认 50（0.5 m）"},
                          "span": {"type": "number", "description": "扫描半宽 cm^-1，默认 0.8"},
                          "fscan": {"type": "number", "description": "三角波频率 Hz，默认 100"},
                          "fs": {"type": "number", "description": "采样率 Hz，默认 5e5"},
