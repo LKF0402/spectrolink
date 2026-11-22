@@ -88,7 +88,7 @@ def _ensure_db():
     HAPI 1.x 的 `db_begin` 只激活一个 DATABASE_DIR；因此这里选第一个**可写**目录作为
     写入主目录，其余目录仅作为只读缓存来源（见 `_sync_table` 的按需复制）。
     """
-    global _DB_READY, _DATA_DIR, _DATA_DIRS
+    global _DB_READY, _DATA_DIR
     if not _DB_READY:
         _DATA_DIR = Path(_DATA_DIR)  # 兼容字符串传入
         # 尝试建目录，失败就 fallback 到仓库内（兼容旧安装）

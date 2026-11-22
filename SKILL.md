@@ -61,9 +61,9 @@ description: SpectroLink —— 多技术光谱传感仿真 MCP 总入口。触�
 |---|---|---|
 | 文档/文案，未动 schema | 不跑代码门禁 | selftest / RPC |
 | 单工具函数 | `py_compile` + 1 正例 + 1 边界 | 全量契约 / 其他技术 |
-| schema / 协议 / DISPATCH | `contract_check.py` + 对应 `_rpc_test.py` | 其他技术 selftest |
+| schema / 协议 / DISPATCH | `verify_protocol.py` + `contract_check.py` + 对应 `_rpc_test.py` | 其他技术 selftest |
 | HITRAN / 缓存 / 物理内核 | 对应 server `--selftest` + 1 组前后基准 | 六技术全量 |
-| 发布前 | 全量契约 + 两套 RPC + 受影响 selftest | — |
+| 发布前 | 跨六技术协议契约 + TDLAS 全量契约 + 两套 RPC + 受影响 selftest | — |
 
 统一入口：`python verify_changed.py` 按改动文件自动选检查；发布前用 `--full`。
 
@@ -85,7 +85,7 @@ description: SpectroLink —— 多技术光谱传感仿真 MCP 总入口。触�
 六个 server 都用 stdio：客户端配置 `command = 本机 python`、`args = [server-<技术>/tools/<技术>_mcp.py]` 即可。
 **不提供 HTTP 端口 / 公网隧道 / Bearer 鉴权**——远程形态已整体移除（见 CHANGELOG 第二十三轮）。
 
-自检：`python server-tdlas/tools/tdlas_mcp.py --selftest`（其余技术同名 `--selftest`）。
+自检：`python server-tdlas/tools/tdlas_mcp.py --selftest`（其余技术同名 `--selftest`）；跨技术协议契约 `python verify_protocol.py`（离线）。
 
 ## 6. 子 SKILL 索引
 

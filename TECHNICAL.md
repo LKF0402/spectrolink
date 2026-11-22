@@ -394,6 +394,10 @@ out["next_required_actions"] = [
 - **按需下发**：本会话已下发且语境未变的动作不再重复（沿用 `alpha_report.needs_report` 的既有范式），
   否则每次返回都重发整张清单只是把散文搬进 payload 并反复计费。
 - **纯函数** `build_next_actions(out)` 与 `validate_wms_result` 平行，可直接单测（契约测试已覆盖）。
+- **协议契约自检** `verify_protocol.py`（离线，CI 硬门禁）：对六个 server 逐一校验工具数下限、工具名唯一、
+  `TOOLS↔DISPATCH` 一一对应、`tools/list` 名序、schema 声明完整性（`type`/`anyOf`/`oneOf` 分支）、
+  schema 属性可被函数签名接收、schema 默认值与签名默认值一致，并经 `tools/call` 验证未知键 / 类型错误 /
+  缺必填 / 多态参数非法分支均被拒绝。全部检查在 `validate_args` 处短路，不执行工具函数，因此不触网、不写盘。
 
 **⚠ 两条经过实测标定的口径（别照抄设计稿）**：
 1. **缺参数不阻断结论**。默认工况下 `assumptions` 达 35 项（含全部器件参数）、`clarify.questions` 是

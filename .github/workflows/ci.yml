@@ -42,6 +42,26 @@ jobs:
         Write-Host "py_compile: $($files.Count) files, $($fail.Count) failures"
         if ($fail.Count -gt 0) { $fail | Write-Host; exit 1 }
 
+    # 跨六技术协议契约（离线、确定性）：tools/list、工具名唯一、TOOLS↔DISPATCH、
+    # schema 声明完整性、schema↔签名↔默认值一致，以及 tools/call 的未知键 / 类型 /
+    # 缺必填 / 多态非法分支拒绝。全部在 validate_args 处短路，不执行工具函数。
+    # 它补的是 TDLAS 深契约之外五个 server 的空白：此前那五个只有 --selftest，
+    # selftest 走物理函数、不经过协议层，"声明了却没接上"类错误无人拦。
+    - name: Protocol contract (all six servers, offline)
+      shell: pwsh
+      run: |
+        $MIN_PASS = 250
+        $out = python -X utf8 verify_protocol.py
+        $code = $LASTEXITCODE
+        $out | ForEach-Object { Write-Host $_ }
+        $pass = ([regex]::Matches(($out -join "`n"), '(?m)^PASS\s')).Count
+        Write-Host "protocol: pass=$pass min=$MIN_PASS exit=$code"
+        if ($code -ne 0) { Write-Error "verify_protocol 退出码非 0"; exit 1 }
+        if ($pass -lt $MIN_PASS) {
+          Write-Error "协议契约通过数 $pass 低于下限 $MIN_PASS —— 有 server 被静默跳过，请排查"
+          exit 1
+        }
+
     # 硬门禁（离线、确定性）：schema↔签名一致性、参数透传、越界重锚、
     # 未知键拒绝、批量请求、文件名净化等。这些是不依赖 HITRAN 的契约，必须每次全绿。
     # -X utf8：Windows runner 控制台默认 CP1252，脚本虽已自行 reconfigure，这里再加一道。

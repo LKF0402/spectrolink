@@ -2,6 +2,16 @@
 
 本文件以最简形式记录功能演进（不做过程细节罗列）。
 
+## [1.1.1] — 2026-11-23
+
+**质量门禁补位**：新增跨六技术的协议契约自检 `verify_protocol.py`（254 项，离线、确定性），把此前只有 TDLAS 覆盖的“schema ↔ 签名 ↔ 默认值 ↔ 协议拒绝”扩展到全部 server。
+
+- 新增 `verify_protocol.py`：逐 server 校验工具数下限、工具名唯一、`TOOLS↔DISPATCH` 一一对应、`tools/list` 名序、schema 声明完整性（`type` / `anyOf` / `oneOf` 分支）、schema 属性可被函数签名接收、schema 默认值与签名默认值一致；并经 `tools/call` 验证未知键、类型错误、缺必填与多态参数非法分支均被拒绝。
+- CI 新增协议契约硬门禁（`--min-pass 250`），与 `verify_changed.py` 联动；改动任一 server 或 `spectrolink_core` 时自动触发。
+- TDLAS schema 补漏：`tdlas_export.data` 缺类型声明（客户端无法推断表单类型），补 `object / array`；`mixture` 补 `object` 与 `[species, x]` 二元组分支，与解析实现一致。
+- 代码卫生：清理 2 条 pyflakes 告警（`calibfree.py` 未使用的 `h1`/`cos1` 计算、`hitran.py` 无效 `global _DATA_DIRS`），无行为变化。
+- 示例配置脱敏：`mcp.config.example.json` 恢复通用模板，不随仓库提交本机绝对路径。
+
 ## [1.1.0] — 2026-11-16
 
 **免标定（仅 TDLAS / LITES）**：新增 `spectrolink_core/calibfree.py` 共用内核与两个 MCP 工具，不新增 server、不拆仓库。

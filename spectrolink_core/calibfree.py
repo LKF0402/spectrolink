@@ -369,7 +369,7 @@ def tdlas_shape(x2f, y2f, x2f_bg=None, y2f_bg=None, *,
         raise ValueError("m_range 需满足 0 < 起点 ≤ 终点，且步长 > 0")
     ms = np.arange(m0, m1 + 1e-12, dm)
     theta = np.linspace(0.0, 2.0 * np.pi, 65)
-    cos1, cos2 = np.cos(theta), np.cos(2.0 * theta)
+    cos2 = np.cos(2.0 * theta)
 
     best = None
     candidates = []
@@ -379,7 +379,6 @@ def tdlas_shape(x2f, y2f, x2f_bg=None, y2f_bg=None, *,
             wn_mat = ax[:, None] + a * np.cos(theta)[None, :]
             tau = np.exp(-np.interp(wn_mat, nu, alpha) * L_cm)
             h2 = 2.0 * _trapz(tau * cos2[None, :], theta, axis=1)
-            h1 = 2.0 * _trapz(tau * cos1[None, :], theta, axis=1)
             # 复增益最小二乘：net ≈ g·h2
             denom = float(np.sum(h2 * h2))
             if denom <= 0:

@@ -35,7 +35,7 @@ import tdlas_sim as ts  # noqa: E402
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_INFO = {"protocolVersion": PROTOCOL_VERSION,
                "capabilities": {"tools": {}},
-               "serverInfo": {"name": "tdlas", "version": "1.1.0"}}
+               "serverInfo": {"name": "tdlas", "version": "1.1.1"}}
 OUT_DIR = _ROOT / "tmp" / "mcp_out"
 
 # 远端直链隐私：MCP 返回值（尤其 tools/call 的 log 字段）会被序列化发给远端客户端，
@@ -2846,11 +2846,17 @@ _MIXTURE_PROP = {
                    "N2/O2/Ar 无吸收线、只贡献碰撞展宽（已含在 HITRAN γ_air 内），不要写成组分。",
     "anyOf": [
         {"type": "string"},
-        {"type": "array", "items": {"type": "object",
-                                    "properties": {"species": {"type": "string"},
-                                                   "x": {"type": "number"}},
-                                    "required": ["species", "x"]}},
-        {"type": "array", "items": {"type": "string"}},
+        {"type": "object",
+         "properties": {"species": {"type": "string"}, "x": {"type": "number"}},
+         "required": ["species", "x"]},
+        {"type": "array", "items": {"anyOf": [
+            {"type": "string"},
+            {"type": "object",
+             "properties": {"species": {"type": "string"}, "x": {"type": "number"}},
+             "required": ["species", "x"]},
+            {"type": "array", "items": [{"type": "string"}, {"type": "number"}],
+             "minItems": 2, "maxItems": 2},
+        ]}},
     ],
 }
 
@@ -3332,7 +3338,9 @@ TOOLS = [
     {"name": "tdlas_export",
      "description": "导出结果为 CSV/JSON。",
      "inputSchema": {"type": "object", "properties": {
-         "data": {"description": "要导出的数据（dict 或 list of dict）"},
+         "data": {"description": "要导出的数据（dict 或 list of dict）",
+                  "anyOf": [{"type": "object"},
+                            {"type": "array", "items": {"type": "object"}}]},
          "filename": {"type": "string", "description": "输出文件名（自动存到 tmp/mcp_out/）"},
          "format": {"type": "string", "enum": ["csv", "json"], "description": "导出格式（默认 csv）"}
      }, "required": ["data", "filename"]}},

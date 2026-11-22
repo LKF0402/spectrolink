@@ -48,6 +48,11 @@ def checks_for(files: list[str]) -> list[tuple[str, list[str]]]:
     tdlas = [f for f in files if f.startswith("server-tdlas/") and f.endswith(".py")]
     lites = [f for f in files if f.startswith("server-lites/") and f.endswith(".py")]
     core = [f for f in files if f.startswith("spectrolink_core/") and f.endswith(".py")]
+    any_server = [f for f in files if f.split("/")[0].startswith("server-") and f.endswith(".py")]
+
+    # 协议契约覆盖六个 server：任一 server 或共用内核改动都要过一遍（离线、秒级）。
+    if any_server or core or any(f.endswith("verify_protocol.py") for f in files):
+        checks.append(_command("protocol contract", ["verify_protocol.py"]))
 
     if tdlas or core:
         checks.append(_command("tdlas contract", ["server-tdlas/tools/contract_check.py"]))
@@ -86,6 +91,7 @@ def checks_for(files: list[str]) -> list[tuple[str, list[str]]]:
 
 def full_checks() -> list[tuple[str, list[str]]]:
     checks = [
+        _command("protocol contract", ["verify_protocol.py"]),
         _command("tdlas contract", ["server-tdlas/tools/contract_check.py"]),
         _command("tdlas alpha", ["server-tdlas/tools/alpha_crossval.py"]),
         _command("tdlas fidelity", ["server-tdlas/tools/tdlas_fidelity.py"]),

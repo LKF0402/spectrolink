@@ -76,6 +76,7 @@ _*.py
 
 # Local config (not for repo)
 config.json
+mcp.config.local.json
 local/
 .provenance/
 *.pyc

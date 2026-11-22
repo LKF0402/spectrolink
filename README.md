@@ -21,7 +21,7 @@ TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
 <a href="https://github.com/LKF0402/spectrolink/network/members"><img src="https://img.shields.io/github/forks/LKF0402/spectrolink" alt="Forks"></a>
 <img src="https://img.shields.io/github/commit-activity/m/LKF0402/spectrolink" alt="Commit activity">
 <img src="https://img.shields.io/badge/API%20key-none-4C8C4A" alt="No API key">
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-v1.1.0-blue" alt="Changelog"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-v1.1.1-blue" alt="Changelog"></a>
 <img src="https://img.shields.io/badge/docs-TECHNICAL%20%C2%B7%20USAGE-blueviolet" alt="Docs">
 
 </div>
@@ -116,7 +116,7 @@ TDLAS-DA/WMS · LITES · NDIR · CRDS · FTIR · DOAS<br>
 - **AI 交互契约**：六个技术的仪器/分析工具统一返回 `interaction` 与机器可读 `next_required_actions`；CRDS / NDIR / FTIR / DOAS 的动作只依据各自真实返回字段（浓度域、拟合质量、谱源降级、缺输入等），selftest 不参与记账
 - **保真度台账**：默认生效 11 项 / 需显式开启 6 项，结果随附台账；已建模项与适用范围一目了然
 - **可信度分层**：10 项物理校验与交互合规**分别**计分
-- **可复现 + 离线门禁**：`seed=0` 逐位可复现；契约自检 200 项与保真度审计均为 CI 硬门禁（不依赖网络）
+- **可复现 + 离线门禁**：`seed=0` 逐位可复现；TDLAS 契约自检 200 项、跨六技术协议契约 254 项与保真度审计均为 CI 硬门禁（不依赖网络）
 
 其他：`return_xy` 透出锁相 X/Y 用于 RAM/AM 诊断；`tdlas_invert(n_repeats>0)` 提供测量不确定度（仅统计分量）；`x_list` 支持多浓度同图。细节见 [TECHNICAL.md](./TECHNICAL.md) 与 [docs/VALIDATION.md](./docs/VALIDATION.md)。
 
@@ -223,7 +223,8 @@ pip install -r requirements.txt
 pip install -e ./spectrolink_core          # 共用内核
 
 python server-tdlas/tools/tdlas_mcp.py --selftest   # TDLAS 服务器自检（需访问 hitran.org）
-python server-tdlas/tools/contract_check.py         # 离线契约自检（CI 硬门禁）
+python verify_protocol.py                           # 跨六技术协议契约自检（离线，CI 硬门禁）
+python server-tdlas/tools/contract_check.py         # TDLAS 深度契约自检（离线，CI 硬门禁）
 python server-tdlas/tools/tdlas_fidelity.py         # 离线保真度审计（CI 硬门禁）
 python server-tdlas/tools/alpha_crossval.py         # α(ν) 独立交叉校验（与 HAPI 互校）
 python server-lites/tools/lites_mcp.py --selftest   # LITES 服务器自检
